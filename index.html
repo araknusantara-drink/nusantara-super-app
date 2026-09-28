@@ -24,48 +24,252 @@
   </button>
 </header>
 
+
+<!-- =========================
+     ACCOUNT / LOGIN AREA
+========================= -->
+
+<section
+  id="accountPanel"
+  class="card"
+  style="display:none; margin:16px;"
+>
+
+  <!-- LOGIN -->
+
+  <div id="loginView">
+
+    <h2>Masuk ke akun</h2>
+
+    <p>
+      Masuk untuk melihat pesanan dan mengelola akun.
+    </p>
+
+    <form id="loginForm">
+
+      <label for="loginEmail">
+        Email
+      </label>
+
+      <input
+        id="loginEmail"
+        type="email"
+        placeholder="nama@email.com"
+        required
+      >
+
+      <label for="loginPassword">
+        Password
+      </label>
+
+      <input
+        id="loginPassword"
+        type="password"
+        placeholder="Password"
+        required
+      >
+
+      <button
+        type="submit"
+        class="add"
+      >
+        Masuk
+      </button>
+
+    </form>
+
+    <p id="loginMessage"></p>
+
+    <button
+      type="button"
+      class="text-btn"
+      id="showRegisterButton"
+    >
+      Belum punya akun? Daftar
+    </button>
+
+  </div>
+
+
+  <!-- REGISTER -->
+
+  <div
+    id="registerView"
+    style="display:none;"
+  >
+
+    <h2>Buat akun</h2>
+
+    <p>
+      Buat akun Nusantara Drink untuk mulai berbelanja.
+    </p>
+
+    <form id="registerForm">
+
+      <label for="registerName">
+        Nama lengkap
+      </label>
+
+      <input
+        id="registerName"
+        type="text"
+        placeholder="Nama lengkap"
+        required
+      >
+
+      <label for="registerEmail">
+        Email
+      </label>
+
+      <input
+        id="registerEmail"
+        type="email"
+        placeholder="nama@email.com"
+        required
+      >
+
+      <label for="registerPassword">
+        Password
+      </label>
+
+      <input
+        id="registerPassword"
+        type="password"
+        placeholder="Minimal 6 karakter"
+        minlength="6"
+        required
+      >
+
+      <button
+        type="submit"
+        class="add"
+      >
+        Daftar
+      </button>
+
+    </form>
+
+    <p id="registerMessage"></p>
+
+    <button
+      type="button"
+      class="text-btn"
+      id="showLoginButton"
+    >
+      Sudah punya akun? Masuk
+    </button>
+
+  </div>
+
+
+  <!-- ACCOUNT LOGGED IN -->
+
+  <div
+    id="loggedInView"
+    style="display:none;"
+  >
+
+    <h2>Akun saya</h2>
+
+    <p id="accountName">
+      -
+    </p>
+
+    <p id="accountEmail">
+      -
+    </p>
+
+    <button
+      type="button"
+      class="add"
+      id="logoutButton"
+    >
+      Keluar
+    </button>
+
+  </div>
+
+</section>
+
+
 <main class="container">
 
   <section class="notice">
-    <strong>Produk dengan batasan usia</strong>
+
+    <strong>
+      Produk dengan batasan usia
+    </strong>
+
     <span>
       Verifikasi usia dan ketentuan penjualan akan diterapkan sebelum checkout produksi.
     </span>
+
   </section>
+
 
   <section>
+
     <div class="section-head">
-      <h2>Produk pilihan</h2>
-      <button class="text-btn" id="viewAllButton">
+
+      <h2>
+        Produk pilihan
+      </h2>
+
+      <button
+        class="text-btn"
+        id="viewAllButton"
+      >
         Lihat semua
       </button>
+
     </div>
 
-    <div id="products" class="grid"></div>
+    <div
+      id="products"
+      class="grid"
+    ></div>
+
   </section>
 
+
   <section class="card">
-    <h2>Keranjang</h2>
+
+    <h2>
+      Keranjang
+    </h2>
+
     <div id="cart">
       Keranjang masih kosong.
     </div>
+
   </section>
 
 </main>
 
+
 <nav class="bottom-nav">
-  <button class="active" id="homeNavButton">
+
+  <button
+    class="active"
+    id="homeNavButton"
+  >
     Home
   </button>
 
-  <button id="ordersNavButton">
+  <button
+    id="ordersNavButton"
+  >
     Pesanan
   </button>
 
-  <button id="profileNavButton">
+  <button
+    id="profileNavButton"
+  >
     Profil
   </button>
+
 </nav>
+
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
