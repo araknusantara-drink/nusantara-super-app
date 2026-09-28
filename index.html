@@ -15,7 +15,13 @@
     <h1>Minuman pilihan, lebih mudah.</h1>
   </div>
 
-  <button class="icon-btn" aria-label="Akun">👤</button>
+  <button
+    class="icon-btn"
+    id="accountButton"
+    aria-label="Akun"
+  >
+    👤
+  </button>
 </header>
 
 <main class="container">
@@ -30,7 +36,9 @@
   <section>
     <div class="section-head">
       <h2>Produk pilihan</h2>
-      <button class="text-btn">Lihat semua</button>
+      <button class="text-btn" id="viewAllButton">
+        Lihat semua
+      </button>
     </div>
 
     <div id="products" class="grid"></div>
@@ -38,15 +46,25 @@
 
   <section class="card">
     <h2>Keranjang</h2>
-    <div id="cart">Keranjang masih kosong.</div>
+    <div id="cart">
+      Keranjang masih kosong.
+    </div>
   </section>
 
 </main>
 
 <nav class="bottom-nav">
-  <button class="active">Home</button>
-  <button>Pesanan</button>
-  <button>Profil</button>
+  <button class="active" id="homeNavButton">
+    Home
+  </button>
+
+  <button id="ordersNavButton">
+    Pesanan
+  </button>
+
+  <button id="profileNavButton">
+    Profil
+  </button>
 </nav>
 
 <!-- Supabase -->
