@@ -7,7 +7,9 @@ const supabaseClient = window.supabase.createClient(
 );
 
 let products = [];
-let cart = JSON.parse(localStorage.getItem("nusantara_cart") || "[]");
+let cart = JSON.parse(
+  localStorage.getItem("nusantara_cart") || "[]"
+);
 
 const rupiah = (n) =>
   new Intl.NumberFormat("id-ID", {
@@ -21,7 +23,10 @@ function iconForProduct(name) {
 
   const index =
     Math.abs(
-      [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+      [...name].reduce(
+        (sum, char) => sum + char.charCodeAt(0),
+        0
+      )
     ) % icons.length;
 
   return icons[index];
@@ -34,7 +39,9 @@ function renderProducts() {
     container.innerHTML = `
       <div class="card">
         <strong>Belum ada produk aktif.</strong>
-        <div>Produk akan muncul setelah tersedia di database.</div>
+        <div>
+          Produk akan muncul setelah tersedia di database.
+        </div>
       </div>
     `;
     return;
@@ -44,6 +51,7 @@ function renderProducts() {
     .map(
       (p) => `
         <article class="product">
+
           <div class="product-image">
             ${
               p.image_url
@@ -58,9 +66,13 @@ function renderProducts() {
             ${rupiah(Number(p.price))}
           </div>
 
-          <button class="add" onclick="addToCart(${p.id})">
+          <button
+            class="add"
+            onclick="addToCart(${p.id})"
+          >
             Tambah
           </button>
+
         </article>
       `
     )
@@ -86,7 +98,10 @@ async function loadProducts() {
     });
 
   if (error) {
-    console.error("Gagal mengambil produk:", error);
+    console.error(
+      "Gagal mengambil produk:",
+      error
+    );
 
     document.querySelector("#products").innerHTML = `
       <div class="card">
@@ -106,11 +121,15 @@ async function loadProducts() {
 }
 
 function addToCart(id) {
-  const product = products.find((p) => p.id === id);
+  const product = products.find(
+    (p) => p.id === id
+  );
 
   if (!product) return;
 
-  const existing = cart.find((item) => item.id === id);
+  const existing = cart.find(
+    (item) => item.id === id
+  );
 
   if (existing) {
     existing.qty++;
@@ -136,7 +155,8 @@ function renderCart() {
   const element = document.querySelector("#cart");
 
   if (!cart.length) {
-    element.textContent = "Keranjang masih kosong.";
+    element.textContent =
+      "Keranjang masih kosong.";
     return;
   }
 
@@ -158,5 +178,96 @@ function renderCart() {
     `<hr><strong>Total: ${rupiah(total)}</strong>`;
 }
 
+/* =========================
+   NAVIGASI WEBSITE
+========================= */
+
+function setupNavigation() {
+
+  const accountButton =
+    document.querySelector("#accountButton");
+
+  const viewAllButton =
+    document.querySelector("#viewAllButton");
+
+  const homeNavButton =
+    document.querySelector("#homeNavButton");
+
+  const ordersNavButton =
+    document.querySelector("#ordersNavButton");
+
+  const profileNavButton =
+    document.querySelector("#profileNavButton");
+
+
+  if (accountButton) {
+    accountButton.addEventListener(
+      "click",
+      () => {
+        alert(
+          "Fitur Login & Register akan segera tersedia."
+        );
+      }
+    );
+  }
+
+
+  if (viewAllButton) {
+    viewAllButton.addEventListener(
+      "click",
+      () => {
+        alert(
+          "Halaman katalog lengkap akan segera tersedia."
+        );
+      }
+    );
+  }
+
+
+  if (homeNavButton) {
+    homeNavButton.addEventListener(
+      "click",
+      () => {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      }
+    );
+  }
+
+
+  if (ordersNavButton) {
+    ordersNavButton.addEventListener(
+      "click",
+      () => {
+        alert(
+          "Login diperlukan untuk melihat pesanan."
+        );
+      }
+    );
+  }
+
+
+  if (profileNavButton) {
+    profileNavButton.addEventListener(
+      "click",
+      () => {
+        alert(
+          "Login diperlukan untuk membuka profil."
+        );
+      }
+    );
+  }
+}
+
+
+/* =========================
+   START APPLICATION
+========================= */
+
 renderCart();
+
+setupNavigation();
+
 loadProducts();
