@@ -1,5 +1,6 @@
 const SUPABASE_URL = "https://xevkttwbzfosxmslnrku.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0N";
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0N";
 
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
@@ -18,6 +19,11 @@ const rupiah = (n) =>
     maximumFractionDigits: 0
   }).format(n);
 
+
+/* =========================
+   PRODUK
+========================= */
+
 function iconForProduct(name) {
   const icons = ["🍾", "🥃", "🍷", "🍸"];
 
@@ -32,8 +38,10 @@ function iconForProduct(name) {
   return icons[index];
 }
 
+
 function renderProducts() {
-  const container = document.querySelector("#products");
+  const container =
+    document.querySelector("#products");
 
   if (!products.length) {
     container.innerHTML = `
@@ -44,6 +52,7 @@ function renderProducts() {
         </div>
       </div>
     `;
+
     return;
   }
 
@@ -79,23 +88,25 @@ function renderProducts() {
     .join("");
 }
 
+
 async function loadProducts() {
-  const { data, error } = await supabaseClient
-    .from("products")
-    .select(`
-      id,
-      name,
-      description,
-      image_url,
-      sku,
-      price,
-      stock,
-      is_active
-    `)
-    .eq("is_active", true)
-    .order("created_at", {
-      ascending: true
-    });
+  const { data, error } =
+    await supabaseClient
+      .from("products")
+      .select(`
+        id,
+        name,
+        description,
+        image_url,
+        sku,
+        price,
+        stock,
+        is_active
+      `)
+      .eq("is_active", true)
+      .order("created_at", {
+        ascending: true
+      });
 
   if (error) {
     console.error(
@@ -119,6 +130,11 @@ async function loadProducts() {
 
   renderProducts();
 }
+
+
+/* =========================
+   KERANJANG
+========================= */
 
 function addToCart(id) {
   const product = products.find(
@@ -151,12 +167,15 @@ function addToCart(id) {
   renderCart();
 }
 
+
 function renderCart() {
-  const element = document.querySelector("#cart");
+  const element =
+    document.querySelector("#cart");
 
   if (!cart.length) {
     element.textContent =
       "Keranjang masih kosong.";
+
     return;
   }
 
@@ -178,8 +197,230 @@ function renderCart() {
     `<hr><strong>Total: ${rupiah(total)}</strong>`;
 }
 
+
 /* =========================
-   NAVIGASI WEBSITE
+   ACCOUNT PANEL
+========================= */
+
+function openAccountPanel() {
+  const panel =
+    document.querySelector("#accountPanel");
+
+  if (!panel) return;
+
+  panel.style.display = "block";
+
+  panel.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+
+function closeAccountPanel() {
+  const panel =
+    document.querySelector("#accountPanel");
+
+  if (!panel) return;
+
+  panel.style.display = "none";
+}
+
+
+function showLoginView() {
+  document.querySelector("#loginView").style.display =
+    "block";
+
+  document.querySelector("#registerView").style.display =
+    "none";
+
+  document.querySelector("#loggedInView").style.display =
+    "none";
+}
+
+
+function showRegisterView() {
+  document.querySelector("#loginView").style.display =
+    "none";
+
+  document.querySelector("#registerView").style.display =
+    "block";
+
+  document.querySelector("#loggedInView").style.display =
+    "none";
+}
+
+
+function showLoggedInView(user) {
+  document.querySelector("#loginView").style.display =
+    "none";
+
+  document.querySelector("#registerView").style.display =
+    "none";
+
+  document.querySelector("#loggedInView").style.display =
+    "block";
+
+  const email =
+    user?.email || "-";
+
+  const name =
+    user?.user_metadata?.full_name ||
+    "Customer Nusantara";
+
+  document.querySelector("#accountName").textContent =
+    `Nama: ${name}`;
+
+  document.querySelector("#accountEmail").textContent =
+    `Email: ${email}`;
+}
+
+
+/* =========================
+   REGISTER
+========================= */
+
+async function handleRegister(event) {
+  event.preventDefault();
+
+  const name =
+    document.querySelector("#registerName").value.trim();
+
+  const email =
+    document.querySelector("#registerEmail").value.trim();
+
+  const password =
+    document.querySelector("#registerPassword").value;
+
+  const message =
+    document.querySelector("#registerMessage");
+
+  message.textContent =
+    "Membuat akun...";
+
+  const { data, error } =
+    await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name
+        }
+      }
+    });
+
+  if (error) {
+    console.error(error);
+
+    message.textContent =
+      `Gagal membuat akun: ${error.message}`;
+
+    return;
+  }
+
+  if (data.session) {
+    message.textContent =
+      "Akun berhasil dibuat.";
+
+    showLoggedInView(data.user);
+
+    document.querySelector("#registerForm").reset();
+
+    return;
+  }
+
+  message.textContent =
+    "Akun berhasil dibuat. Silakan cek email untuk verifikasi akun.";
+
+  document.querySelector("#registerForm").reset();
+}
+
+
+/* =========================
+   LOGIN
+========================= */
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const email =
+    document.querySelector("#loginEmail").value.trim();
+
+  const password =
+    document.querySelector("#loginPassword").value;
+
+  const message =
+    document.querySelector("#loginMessage");
+
+  message.textContent =
+    "Memeriksa akun...";
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+  if (error) {
+    console.error(error);
+
+    message.textContent =
+      `Login gagal: ${error.message}`;
+
+    return;
+  }
+
+  message.textContent =
+    "Login berhasil.";
+
+  document.querySelector("#loginForm").reset();
+
+  showLoggedInView(data.user);
+}
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+async function handleLogout() {
+  const { error } =
+    await supabaseClient.auth.signOut();
+
+  if (error) {
+    console.error(error);
+
+    alert(
+      `Gagal keluar: ${error.message}`
+    );
+
+    return;
+  }
+
+  showLoginView();
+
+  document.querySelector("#accountPanel").style.display =
+    "none";
+}
+
+
+/* =========================
+   CEK SESSION
+========================= */
+
+async function checkSession() {
+  const {
+    data: { session }
+  } = await supabaseClient.auth.getSession();
+
+  if (session?.user) {
+    showLoggedInView(session.user);
+  }
+}
+
+
+/* =========================
+   NAVIGASI
 ========================= */
 
 function setupNavigation() {
@@ -203,11 +444,7 @@ function setupNavigation() {
   if (accountButton) {
     accountButton.addEventListener(
       "click",
-      () => {
-        alert(
-          "Fitur Login & Register akan segera tersedia."
-        );
-      }
+      openAccountPanel
     );
   }
 
@@ -216,9 +453,11 @@ function setupNavigation() {
     viewAllButton.addEventListener(
       "click",
       () => {
-        alert(
-          "Halaman katalog lengkap akan segera tersedia."
-        );
+        document
+          .querySelector("#products")
+          .scrollIntoView({
+            behavior: "smooth"
+          });
       }
     );
   }
@@ -240,9 +479,20 @@ function setupNavigation() {
   if (ordersNavButton) {
     ordersNavButton.addEventListener(
       "click",
-      () => {
+      async () => {
+
+        const {
+          data: { session }
+        } = await supabaseClient.auth.getSession();
+
+        if (!session) {
+          openAccountPanel();
+          showLoginView();
+          return;
+        }
+
         alert(
-          "Login diperlukan untuk melihat pesanan."
+          "Halaman pesanan akan kita bangun berikutnya."
         );
       }
     );
@@ -252,10 +502,20 @@ function setupNavigation() {
   if (profileNavButton) {
     profileNavButton.addEventListener(
       "click",
-      () => {
-        alert(
-          "Login diperlukan untuk membuka profil."
-        );
+      async () => {
+
+        const {
+          data: { session }
+        } = await supabaseClient.auth.getSession();
+
+        if (!session) {
+          openAccountPanel();
+          showLoginView();
+          return;
+        }
+
+        openAccountPanel();
+        showLoggedInView(session.user);
       }
     );
   }
@@ -263,11 +523,93 @@ function setupNavigation() {
 
 
 /* =========================
-   START APPLICATION
+   FORM EVENT
+========================= */
+
+function setupAuthForms() {
+
+  const loginForm =
+    document.querySelector("#loginForm");
+
+  const registerForm =
+    document.querySelector("#registerForm");
+
+  const logoutButton =
+    document.querySelector("#logoutButton");
+
+  const showRegisterButton =
+    document.querySelector("#showRegisterButton");
+
+  const showLoginButton =
+    document.querySelector("#showLoginButton");
+
+
+  if (loginForm) {
+    loginForm.addEventListener(
+      "submit",
+      handleLogin
+    );
+  }
+
+
+  if (registerForm) {
+    registerForm.addEventListener(
+      "submit",
+      handleRegister
+    );
+  }
+
+
+  if (logoutButton) {
+    logoutButton.addEventListener(
+      "click",
+      handleLogout
+    );
+  }
+
+
+  if (showRegisterButton) {
+    showRegisterButton.addEventListener(
+      "click",
+      showRegisterView
+    );
+  }
+
+
+  if (showLoginButton) {
+    showLoginButton.addEventListener(
+      "click",
+      showLoginView
+    );
+  }
+}
+
+
+/* =========================
+   AUTH STATE
+========================= */
+
+supabaseClient.auth.onAuthStateChange(
+  (event, session) => {
+
+    if (session?.user) {
+      showLoggedInView(session.user);
+    }
+
+  }
+);
+
+
+/* =========================
+   START
 ========================= */
 
 renderCart();
 
 setupNavigation();
+
+setupAuthForms();
+
+checkSession();
 
 loadProducts();
