@@ -1,16 +1,33 @@
-const SUPABASE_URL = "https://xevkttwbzfosxmslnrku.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0N";
+const SUPABASE_URL =
+  "https://xevkttwbzfosxmslnrku.supabase.co";
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0";
+
+const LIVE_SITE_URL =
+  "https://araknusantara-drink.github.io/nusantara-super-app/";
+
+const supabaseClient =
+  window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+
+/* =========================
+   DATA
+========================= */
 
 let products = [];
+
 let cart = JSON.parse(
   localStorage.getItem("nusantara_cart") || "[]"
 );
+
+
+/* =========================
+   FORMAT RUPIAH
+========================= */
 
 const rupiah = (n) =>
   new Intl.NumberFormat("id-ID", {
@@ -21,16 +38,23 @@ const rupiah = (n) =>
 
 
 /* =========================
-   PRODUK
+   PRODUCT ICON
 ========================= */
 
 function iconForProduct(name) {
-  const icons = ["🍾", "🥃", "🍷", "🍸"];
+
+  const icons = [
+    "🍾",
+    "🥃",
+    "🍷",
+    "🍸"
+  ];
 
   const index =
     Math.abs(
       [...name].reduce(
-        (sum, char) => sum + char.charCodeAt(0),
+        (sum, char) =>
+          sum + char.charCodeAt(0),
         0
       )
     ) % icons.length;
@@ -39,14 +63,25 @@ function iconForProduct(name) {
 }
 
 
+/* =========================
+   RENDER PRODUCTS
+========================= */
+
 function renderProducts() {
+
   const container =
     document.querySelector("#products");
 
+  if (!container) return;
+
   if (!products.length) {
+
     container.innerHTML = `
       <div class="card">
-        <strong>Belum ada produk aktif.</strong>
+        <strong>
+          Belum ada produk aktif.
+        </strong>
+
         <div>
           Produk akan muncul setelah tersedia di database.
         </div>
@@ -56,41 +91,59 @@ function renderProducts() {
     return;
   }
 
-  container.innerHTML = products
-    .map(
-      (p) => `
-        <article class="product">
+  container.innerHTML =
+    products
+      .map(
+        (p) => `
+          <article class="product">
 
-          <div class="product-image">
-            ${
-              p.image_url
-                ? `<img src="${p.image_url}" alt="${p.name}">`
-                : iconForProduct(p.name)
-            }
-          </div>
+            <div class="product-image">
 
-          <h3>${p.name}</h3>
+              ${
+                p.image_url
+                  ? `
+                    <img
+                      src="${p.image_url}"
+                      alt="${p.name}"
+                    >
+                  `
+                  : iconForProduct(p.name)
+              }
 
-          <div class="price">
-            ${rupiah(Number(p.price))}
-          </div>
+            </div>
 
-          <button
-            class="add"
-            onclick="addToCart(${p.id})"
-          >
-            Tambah
-          </button>
+            <h3>
+              ${p.name}
+            </h3>
 
-        </article>
-      `
-    )
-    .join("");
+            <div class="price">
+              ${rupiah(Number(p.price))}
+            </div>
+
+            <button
+              class="add"
+              onclick="addToCart(${p.id})"
+            >
+              Tambah
+            </button>
+
+          </article>
+        `
+      )
+      .join("");
 }
 
 
+/* =========================
+   LOAD PRODUCTS
+========================= */
+
 async function loadProducts() {
-  const { data, error } =
+
+  const {
+    data,
+    error
+  } =
     await supabaseClient
       .from("products")
       .select(`
@@ -109,19 +162,31 @@ async function loadProducts() {
       });
 
   if (error) {
+
     console.error(
       "Gagal mengambil produk:",
       error
     );
 
-    document.querySelector("#products").innerHTML = `
-      <div class="card">
-        <strong>Produk belum bisa dimuat.</strong>
-        <div>
-          Ada masalah koneksi ke database Supabase.
+    const container =
+      document.querySelector("#products");
+
+    if (container) {
+
+      container.innerHTML = `
+        <div class="card">
+
+          <strong>
+            Produk belum bisa dimuat.
+          </strong>
+
+          <div>
+            Ada masalah koneksi ke database Supabase.
+          </div>
+
         </div>
-      </div>
-    `;
+      `;
+    }
 
     return;
   }
@@ -133,29 +198,41 @@ async function loadProducts() {
 
 
 /* =========================
-   KERANJANG
+   CART
 ========================= */
 
 function addToCart(id) {
-  const product = products.find(
-    (p) => p.id === id
-  );
+
+  const product =
+    products.find(
+      (p) => p.id === id
+    );
 
   if (!product) return;
 
-  const existing = cart.find(
-    (item) => item.id === id
-  );
+  const existing =
+    cart.find(
+      (item) => item.id === id
+    );
 
   if (existing) {
+
     existing.qty++;
+
   } else {
+
     cart.push({
+
       id: product.id,
+
       name: product.name,
+
       price: Number(product.price),
+
       image_url: product.image_url,
+
       qty: 1
+
     });
   }
 
@@ -169,32 +246,55 @@ function addToCart(id) {
 
 
 function renderCart() {
+
   const element =
     document.querySelector("#cart");
 
+  if (!element) return;
+
   if (!cart.length) {
+
     element.textContent =
       "Keranjang masih kosong.";
 
     return;
   }
 
-  const total = cart.reduce(
-    (sum, item) =>
-      sum + item.price * item.qty,
-    0
-  );
+  const total =
+    cart.reduce(
+      (sum, item) =>
+        sum +
+        item.price *
+        item.qty,
+      0
+    );
 
   element.innerHTML =
+
     cart
       .map(
-        (item) =>
-          `${item.name} × ${item.qty} — ${rupiah(
-            item.price * item.qty
-          )}`
+        (item) => `
+          ${item.name}
+          × ${item.qty}
+          —
+          ${rupiah(
+            item.price *
+            item.qty
+          )}
+        `
       )
-      .join("<br>") +
-    `<hr><strong>Total: ${rupiah(total)}</strong>`;
+      .join("<br>")
+
+    +
+
+    `
+      <hr>
+
+      <strong>
+        Total:
+        ${rupiah(total)}
+      </strong>
+    `;
 }
 
 
@@ -203,12 +303,16 @@ function renderCart() {
 ========================= */
 
 function openAccountPanel() {
+
   const panel =
-    document.querySelector("#accountPanel");
+    document.querySelector(
+      "#accountPanel"
+    );
 
   if (!panel) return;
 
-  panel.style.display = "block";
+  panel.style.display =
+    "block";
 
   panel.scrollIntoView({
     behavior: "smooth",
@@ -218,61 +322,289 @@ function openAccountPanel() {
 
 
 function closeAccountPanel() {
+
   const panel =
-    document.querySelector("#accountPanel");
+    document.querySelector(
+      "#accountPanel"
+    );
 
   if (!panel) return;
 
-  panel.style.display = "none";
+  panel.style.display =
+    "none";
 }
 
 
+/* =========================
+   AUTH VIEW
+========================= */
+
 function showLoginView() {
-  document.querySelector("#loginView").style.display =
-    "block";
 
-  document.querySelector("#registerView").style.display =
-    "none";
+  const login =
+    document.querySelector(
+      "#loginView"
+    );
 
-  document.querySelector("#loggedInView").style.display =
-    "none";
+  const register =
+    document.querySelector(
+      "#registerView"
+    );
+
+  const loggedIn =
+    document.querySelector(
+      "#loggedInView"
+    );
+
+  if (login)
+    login.style.display =
+      "block";
+
+  if (register)
+    register.style.display =
+      "none";
+
+  if (loggedIn)
+    loggedIn.style.display =
+      "none";
 }
 
 
 function showRegisterView() {
-  document.querySelector("#loginView").style.display =
-    "none";
 
-  document.querySelector("#registerView").style.display =
-    "block";
+  const login =
+    document.querySelector(
+      "#loginView"
+    );
 
-  document.querySelector("#loggedInView").style.display =
-    "none";
+  const register =
+    document.querySelector(
+      "#registerView"
+    );
+
+  const loggedIn =
+    document.querySelector(
+      "#loggedInView"
+    );
+
+  if (login)
+    login.style.display =
+      "none";
+
+  if (register)
+    register.style.display =
+      "block";
+
+  if (loggedIn)
+    loggedIn.style.display =
+      "none";
 }
 
 
 function showLoggedInView(user) {
-  document.querySelector("#loginView").style.display =
-    "none";
 
-  document.querySelector("#registerView").style.display =
-    "none";
+  const login =
+    document.querySelector(
+      "#loginView"
+    );
 
-  document.querySelector("#loggedInView").style.display =
-    "block";
+  const register =
+    document.querySelector(
+      "#registerView"
+    );
+
+  const loggedIn =
+    document.querySelector(
+      "#loggedInView"
+    );
+
+  if (login)
+    login.style.display =
+      "none";
+
+  if (register)
+    register.style.display =
+      "none";
+
+  if (loggedIn)
+    loggedIn.style.display =
+      "block";
+
 
   const email =
-    user?.email || "-";
+    user?.email ||
+    "-";
+
 
   const name =
     user?.user_metadata?.full_name ||
     "Customer Nusantara";
 
-  document.querySelector("#accountName").textContent =
-    `Nama: ${name}`;
 
-  document.querySelector("#accountEmail").textContent =
-    `Email: ${email}`;
+  const accountName =
+    document.querySelector(
+      "#accountName"
+    );
+
+  const accountEmail =
+    document.querySelector(
+      "#accountEmail"
+    );
+
+
+  if (accountName) {
+
+    accountName.textContent =
+      `Nama: ${name}`;
+  }
+
+
+  if (accountEmail) {
+
+    accountEmail.textContent =
+      `Email: ${email}`;
+  }
+}
+
+
+/* =========================
+   MESSAGE HELPER
+========================= */
+
+function setMessage(
+  element,
+  message
+) {
+
+  if (!element) return;
+
+  element.textContent =
+    message;
+}
+
+
+/* =========================
+   RESEND VERIFICATION
+========================= */
+
+async function resendVerification(
+  email,
+  messageElement
+) {
+
+  if (!email) {
+
+    setMessage(
+      messageElement,
+      "Masukkan email terlebih dahulu."
+    );
+
+    return;
+  }
+
+
+  setMessage(
+    messageElement,
+    "Mengirim ulang email verifikasi..."
+  );
+
+
+  const {
+    error
+  } =
+    await supabaseClient.auth.resend({
+      type: "signup",
+
+      email: email,
+
+      options: {
+        emailRedirectTo:
+          LIVE_SITE_URL
+      }
+    });
+
+
+  if (error) {
+
+    console.error(
+      "Gagal mengirim ulang:",
+      error
+    );
+
+    setMessage(
+      messageElement,
+      `Gagal mengirim email: ${error.message}`
+    );
+
+    return;
+  }
+
+
+  setMessage(
+    messageElement,
+    "Email verifikasi baru sudah dikirim. Silakan cek inbox atau folder spam."
+  );
+}
+
+
+/* =========================
+   RESEND BUTTON
+========================= */
+
+function showResendButton(
+  email,
+  messageElement
+) {
+
+  if (!messageElement) return;
+
+
+  const oldButton =
+    document.querySelector(
+      ".resend-verification-button"
+    );
+
+  if (oldButton)
+    oldButton.remove();
+
+
+  const button =
+    document.createElement(
+      "button"
+    );
+
+
+  button.type =
+    "button";
+
+  button.className =
+    "text-btn resend-verification-button";
+
+  button.textContent =
+    "Kirim ulang email verifikasi";
+
+
+  button.style.display =
+    "block";
+
+  button.style.marginTop =
+    "10px";
+
+
+  button.addEventListener(
+    "click",
+    () =>
+      resendVerification(
+        email,
+        messageElement
+      )
+  );
+
+
+  messageElement.insertAdjacentElement(
+    "afterend",
+    button
+  );
 }
 
 
@@ -280,59 +612,124 @@ function showLoggedInView(user) {
    REGISTER
 ========================= */
 
-async function handleRegister(event) {
+async function handleRegister(
+  event
+) {
+
   event.preventDefault();
 
+
   const name =
-    document.querySelector("#registerName").value.trim();
+    document
+      .querySelector(
+        "#registerName"
+      )
+      .value
+      .trim();
+
 
   const email =
-    document.querySelector("#registerEmail").value.trim();
+    document
+      .querySelector(
+        "#registerEmail"
+      )
+      .value
+      .trim();
+
 
   const password =
-    document.querySelector("#registerPassword").value;
+    document
+      .querySelector(
+        "#registerPassword"
+      )
+      .value;
+
 
   const message =
-    document.querySelector("#registerMessage");
+    document.querySelector(
+      "#registerMessage"
+    );
 
-  message.textContent =
-    "Membuat akun...";
 
-  const { data, error } =
+  setMessage(
+    message,
+    "Membuat akun..."
+  );
+
+
+  const {
+    data,
+    error
+  } =
     await supabaseClient.auth.signUp({
+
       email,
+
       password,
+
       options: {
+
+        emailRedirectTo:
+          LIVE_SITE_URL,
+
         data: {
-          full_name: name
+
+          full_name:
+            name
+
         }
       }
     });
 
-  if (error) {
-    console.error(error);
 
-    message.textContent =
-      `Gagal membuat akun: ${error.message}`;
+  if (error) {
+
+    console.error(
+      "Register error:",
+      error
+    );
+
+    setMessage(
+      message,
+      `Gagal membuat akun: ${error.message}`
+    );
 
     return;
   }
+
+
+  document
+    .querySelector(
+      "#registerForm"
+    )
+    .reset();
+
 
   if (data.session) {
-    message.textContent =
-      "Akun berhasil dibuat.";
 
-    showLoggedInView(data.user);
+    setMessage(
+      message,
+      "Akun berhasil dibuat dan langsung aktif."
+    );
 
-    document.querySelector("#registerForm").reset();
+    showLoggedInView(
+      data.user
+    );
 
     return;
   }
 
-  message.textContent =
-    "Akun berhasil dibuat. Silakan cek email untuk verifikasi akun.";
 
-  document.querySelector("#registerForm").reset();
+  setMessage(
+    message,
+    "Akun berhasil dibuat. Silakan cek email untuk verifikasi."
+  );
+
+
+  showResendButton(
+    email,
+    message
+  );
 }
 
 
@@ -340,42 +737,102 @@ async function handleRegister(event) {
    LOGIN
 ========================= */
 
-async function handleLogin(event) {
+async function handleLogin(
+  event
+) {
+
   event.preventDefault();
 
+
   const email =
-    document.querySelector("#loginEmail").value.trim();
+    document
+      .querySelector(
+        "#loginEmail"
+      )
+      .value
+      .trim();
+
 
   const password =
-    document.querySelector("#loginPassword").value;
+    document
+      .querySelector(
+        "#loginPassword"
+      )
+      .value;
+
 
   const message =
-    document.querySelector("#loginMessage");
+    document.querySelector(
+      "#loginMessage"
+    );
 
-  message.textContent =
-    "Memeriksa akun...";
 
-  const { data, error } =
+  setMessage(
+    message,
+    "Memeriksa akun..."
+  );
+
+
+  const {
+    data,
+    error
+  } =
     await supabaseClient.auth.signInWithPassword({
+
       email,
+
       password
+
     });
 
-  if (error) {
-    console.error(error);
 
-    message.textContent =
-      `Login gagal: ${error.message}`;
+  if (error) {
+
+    console.error(
+      "Login error:",
+      error
+    );
+
+
+    setMessage(
+      message,
+      `Login gagal: ${error.message}`
+    );
+
+
+    if (
+      error.message
+        .toLowerCase()
+        .includes("email not confirmed")
+    ) {
+
+      showResendButton(
+        email,
+        message
+      );
+    }
+
 
     return;
   }
 
-  message.textContent =
-    "Login berhasil.";
 
-  document.querySelector("#loginForm").reset();
+  setMessage(
+    message,
+    "Login berhasil."
+  );
 
-  showLoggedInView(data.user);
+
+  document
+    .querySelector(
+      "#loginForm"
+    )
+    .reset();
+
+
+  showLoggedInView(
+    data.user
+  );
 }
 
 
@@ -384,11 +841,19 @@ async function handleLogin(event) {
 ========================= */
 
 async function handleLogout() {
-  const { error } =
+
+  const {
+    error
+  } =
     await supabaseClient.auth.signOut();
 
+
   if (error) {
-    console.error(error);
+
+    console.error(
+      "Logout error:",
+      error
+    );
 
     alert(
       `Gagal keluar: ${error.message}`
@@ -397,76 +862,137 @@ async function handleLogout() {
     return;
   }
 
+
   showLoginView();
 
-  document.querySelector("#accountPanel").style.display =
-    "none";
+  closeAccountPanel();
 }
 
 
 /* =========================
-   CEK SESSION
+   SESSION
 ========================= */
 
 async function checkSession() {
-  const {
-    data: { session }
-  } = await supabaseClient.auth.getSession();
 
-  if (session?.user) {
-    showLoggedInView(session.user);
+  const {
+    data: {
+      session
+    }
+  } =
+    await supabaseClient.auth.getSession();
+
+
+  if (
+    session?.user
+  ) {
+
+    showLoggedInView(
+      session.user
+    );
   }
 }
 
 
 /* =========================
-   NAVIGASI
+   NAVIGATION
 ========================= */
 
 function setupNavigation() {
 
   const accountButton =
-    document.querySelector("#accountButton");
+    document.querySelector(
+      "#accountButton"
+    );
+
 
   const viewAllButton =
-    document.querySelector("#viewAllButton");
+    document.querySelector(
+      "#viewAllButton"
+    );
+
 
   const homeNavButton =
-    document.querySelector("#homeNavButton");
+    document.querySelector(
+      "#homeNavButton"
+    );
+
 
   const ordersNavButton =
-    document.querySelector("#ordersNavButton");
+    document.querySelector(
+      "#ordersNavButton"
+    );
+
 
   const profileNavButton =
-    document.querySelector("#profileNavButton");
+    document.querySelector(
+      "#profileNavButton"
+    );
 
 
   if (accountButton) {
+
     accountButton.addEventListener(
       "click",
-      openAccountPanel
+      async () => {
+
+        openAccountPanel();
+
+        const {
+          data: {
+            session
+          }
+        } =
+          await supabaseClient.auth.getSession();
+
+
+        if (
+          session?.user
+        ) {
+
+          showLoggedInView(
+            session.user
+          );
+
+        } else {
+
+          showLoginView();
+        }
+      }
     );
   }
 
 
   if (viewAllButton) {
+
     viewAllButton.addEventListener(
       "click",
       () => {
-        document
-          .querySelector("#products")
-          .scrollIntoView({
+
+        const productsSection =
+          document.querySelector(
+            "#products"
+          );
+
+        if (
+          productsSection
+        ) {
+
+          productsSection.scrollIntoView({
             behavior: "smooth"
           });
+        }
       }
     );
   }
 
 
   if (homeNavButton) {
+
     homeNavButton.addEventListener(
       "click",
       () => {
+
         window.scrollTo({
           top: 0,
           behavior: "smooth"
@@ -477,19 +1003,28 @@ function setupNavigation() {
 
 
   if (ordersNavButton) {
+
     ordersNavButton.addEventListener(
       "click",
       async () => {
 
         const {
-          data: { session }
-        } = await supabaseClient.auth.getSession();
+          data: {
+            session
+          }
+        } =
+          await supabaseClient.auth.getSession();
+
 
         if (!session) {
+
           openAccountPanel();
+
           showLoginView();
+
           return;
         }
+
 
         alert(
           "Halaman pesanan akan kita bangun berikutnya."
@@ -500,22 +1035,34 @@ function setupNavigation() {
 
 
   if (profileNavButton) {
+
     profileNavButton.addEventListener(
       "click",
       async () => {
 
         const {
-          data: { session }
-        } = await supabaseClient.auth.getSession();
+          data: {
+            session
+          }
+        } =
+          await supabaseClient.auth.getSession();
+
 
         if (!session) {
+
           openAccountPanel();
+
           showLoginView();
+
           return;
         }
 
+
         openAccountPanel();
-        showLoggedInView(session.user);
+
+        showLoggedInView(
+          session.user
+        );
       }
     );
   }
@@ -523,28 +1070,43 @@ function setupNavigation() {
 
 
 /* =========================
-   FORM EVENT
+   AUTH FORMS
 ========================= */
 
 function setupAuthForms() {
 
   const loginForm =
-    document.querySelector("#loginForm");
+    document.querySelector(
+      "#loginForm"
+    );
+
 
   const registerForm =
-    document.querySelector("#registerForm");
+    document.querySelector(
+      "#registerForm"
+    );
+
 
   const logoutButton =
-    document.querySelector("#logoutButton");
+    document.querySelector(
+      "#logoutButton"
+    );
+
 
   const showRegisterButton =
-    document.querySelector("#showRegisterButton");
+    document.querySelector(
+      "#showRegisterButton"
+    );
+
 
   const showLoginButton =
-    document.querySelector("#showLoginButton");
+    document.querySelector(
+      "#showLoginButton"
+    );
 
 
   if (loginForm) {
+
     loginForm.addEventListener(
       "submit",
       handleLogin
@@ -553,6 +1115,7 @@ function setupAuthForms() {
 
 
   if (registerForm) {
+
     registerForm.addEventListener(
       "submit",
       handleRegister
@@ -561,6 +1124,7 @@ function setupAuthForms() {
 
 
   if (logoutButton) {
+
     logoutButton.addEventListener(
       "click",
       handleLogout
@@ -569,6 +1133,7 @@ function setupAuthForms() {
 
 
   if (showRegisterButton) {
+
     showRegisterButton.addEventListener(
       "click",
       showRegisterView
@@ -577,6 +1142,7 @@ function setupAuthForms() {
 
 
   if (showLoginButton) {
+
     showLoginButton.addEventListener(
       "click",
       showLoginView
@@ -586,22 +1152,35 @@ function setupAuthForms() {
 
 
 /* =========================
-   AUTH STATE
+   AUTH STATE CHANGE
 ========================= */
 
 supabaseClient.auth.onAuthStateChange(
-  (event, session) => {
+  (
+    event,
+    session
+  ) => {
 
-    if (session?.user) {
-      showLoggedInView(session.user);
+    console.log(
+      "Auth event:",
+      event
+    );
+
+
+    if (
+      session?.user
+    ) {
+
+      showLoggedInView(
+        session.user
+      );
     }
-
   }
 );
 
 
 /* =========================
-   START
+   START APPLICATION
 ========================= */
 
 renderCart();
