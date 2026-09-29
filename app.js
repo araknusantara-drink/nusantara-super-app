@@ -2,7 +2,7 @@ const SUPABASE_URL =
   "https://xevkttwbzfosxmslnrku.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhldmt0d2J6Zm9zeG1zbG5ya3UiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc5MDQwNTkzNywiZXhwIjoyMTA1OTgxOTM3fQ.KI-1LcZ0mJIFbUHH6Br9LKphHns13mREGzpK9rOtzCc";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhldmt0dHdiemZvc3htc2xucmt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MDU5MzcsImV4cCI6MjEwNTk4MTkzN30.KI-1LcZ0mJIFbUHH6Br9LKphHns13mREGzpK9rOtzCc";
 
 const LIVE_SITE_URL =
   "https://araknusantara-drink.github.io/nusantara-super-app/";
