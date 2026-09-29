@@ -13,11 +13,6 @@ const supabaseClient =
     SUPABASE_PUBLISHABLE_KEY
   );
 
-
-/* =========================
-   DATA
-========================= */
-
 let products = [];
 
 let cart = JSON.parse(
@@ -42,19 +37,12 @@ const rupiah = (n) =>
 ========================= */
 
 function iconForProduct(name) {
-
-  const icons = [
-    "🍾",
-    "🥃",
-    "🍷",
-    "🍸"
-  ];
+  const icons = ["🍾", "🥃", "🍷", "🍸"];
 
   const index =
     Math.abs(
       [...name].reduce(
-        (sum, char) =>
-          sum + char.charCodeAt(0),
+        (sum, char) => sum + char.charCodeAt(0),
         0
       )
     ) % icons.length;
@@ -68,69 +56,57 @@ function iconForProduct(name) {
 ========================= */
 
 function renderProducts() {
-
   const container =
     document.querySelector("#products");
 
   if (!container) return;
 
   if (!products.length) {
-
     container.innerHTML = `
       <div class="card">
-        <strong>
-          Belum ada produk aktif.
-        </strong>
-
+        <strong>Belum ada produk aktif.</strong>
         <div>
           Produk akan muncul setelah tersedia di database.
         </div>
       </div>
     `;
-
     return;
   }
 
   container.innerHTML =
-    products
-      .map(
-        (p) => `
-          <article class="product">
+    products.map(
+      (p) => `
+        <article class="product">
 
-            <div class="product-image">
+          <div class="product-image">
+            ${
+              p.image_url
+                ? `
+                  <img
+                    src="${p.image_url}"
+                    alt="${p.name}"
+                  >
+                `
+                : iconForProduct(p.name)
+            }
+          </div>
 
-              ${
-                p.image_url
-                  ? `
-                    <img
-                      src="${p.image_url}"
-                      alt="${p.name}"
-                    >
-                  `
-                  : iconForProduct(p.name)
-              }
+          <h3>${p.name}</h3>
 
-            </div>
+          <div class="price">
+            ${rupiah(Number(p.price))}
+          </div>
 
-            <h3>
-              ${p.name}
-            </h3>
+          <button
+            class="add"
+            onclick="addToCart(${p.id})"
+          >
+            Tambah
+          </button>
 
-            <div class="price">
-              ${rupiah(Number(p.price))}
-            </div>
-
-            <button
-              class="add"
-              onclick="addToCart(${p.id})"
-            >
-              Tambah
-            </button>
-
-          </article>
-        `
-      )
-      .join("");
+        </article>
+      `
+    ).join("");
 }
 
 
@@ -140,38 +116,44 @@ function renderProducts() {
 
 async function loadProducts() {
 
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
-      .from("products")
-      .select(`
-        id,
-        name,
-        description,
-        image_url,
-        sku,
-        price,
-        stock,
-        is_active
-      `)
-      .eq("is_active", true)
-      .order("created_at", {
-        ascending: true
-      });
+  const container =
+    document.querySelector("#products");
 
-  if (error) {
+  if (!container) return;
 
-    console.error(
-      "Gagal mengambil produk:",
-      error
-    );
+  container.innerHTML = `
+    <div class="card">
+      <strong>Memuat produk...</strong>
+      <div>Menghubungkan ke database.</div>
+    </div>
+  `;
 
-    const container =
-      document.querySelector("#products");
+  try {
 
-    if (container) {
+    const result =
+      await supabaseClient
+        .from("products")
+        .select("*")
+        .eq("is_active", true)
+        .order("id", {
+          ascending: true
+        });
+
+    console.log("SUPABASE PRODUCT RESULT:", result);
+
+    const {
+      data,
+      error,
+      status,
+      statusText
+    } = result;
+
+    if (error) {
+
+      console.error(
+        "SUPABASE PRODUCT ERROR:",
+        error
+      );
 
       container.innerHTML = `
         <div class="card">
@@ -180,20 +162,79 @@ async function loadProducts() {
             Produk belum bisa dimuat.
           </strong>
 
-          <div>
-            Ada masalah koneksi ke database Supabase.
+          <div style="margin-top:10px;">
+            Koneksi ke database gagal.
+          </div>
+
+          <div style="
+            margin-top:12px;
+            padding:10px;
+            background:#f1f1f1;
+            border-radius:8px;
+            font-size:13px;
+            word-break:break-word;
+          ">
+            <strong>Detail error:</strong><br>
+            ${error.message || "Tidak ada pesan error"}<br><br>
+
+            <strong>Code:</strong>
+            ${error.code || "-"}<br>
+
+            <strong>Status:</strong>
+            ${status || "-"}<br>
+
+            <strong>Status text:</strong>
+            ${statusText || "-"}
           </div>
 
         </div>
       `;
+
+      return;
     }
 
-    return;
+    products = data || [];
+
+    console.log(
+      "JUMLAH PRODUK:",
+      products.length
+    );
+
+    renderProducts();
+
+  } catch (err) {
+
+    console.error(
+      "PRODUCT FETCH EXCEPTION:",
+      err
+    );
+
+    container.innerHTML = `
+      <div class="card">
+
+        <strong>
+          Produk belum bisa dimuat.
+        </strong>
+
+        <div style="margin-top:10px;">
+          Terjadi error saat menghubungkan website
+          ke Supabase.
+        </div>
+
+        <div style="
+          margin-top:12px;
+          padding:10px;
+          background:#f1f1f1;
+          border-radius:8px;
+          font-size:13px;
+          word-break:break-word;
+        ">
+          ${err.message || err}
+        </div>
+
+      </div>
+    `;
   }
-
-  products = data || [];
-
-  renderProducts();
 }
 
 
@@ -216,23 +257,14 @@ function addToCart(id) {
     );
 
   if (existing) {
-
     existing.qty++;
-
   } else {
-
     cart.push({
-
       id: product.id,
-
       name: product.name,
-
       price: Number(product.price),
-
       image_url: product.image_url,
-
       qty: 1
-
     });
   }
 
@@ -253,43 +285,31 @@ function renderCart() {
   if (!element) return;
 
   if (!cart.length) {
-
     element.textContent =
       "Keranjang masih kosong.";
-
     return;
   }
 
   const total =
     cart.reduce(
       (sum, item) =>
-        sum +
-        item.price *
-        item.qty,
+        sum + item.price * item.qty,
       0
     );
 
   element.innerHTML =
-
-    cart
-      .map(
-        (item) => `
-          ${item.name}
-          × ${item.qty}
-          —
-          ${rupiah(
-            item.price *
-            item.qty
-          )}
-        `
-      )
-      .join("<br>")
-
-    +
-
+    cart.map(
+      (item) => `
+        ${item.name}
+        × ${item.qty}
+        —
+        ${rupiah(
+          item.price * item.qty
+        )}
+      `
+    ).join("<br>") +
     `
       <hr>
-
       <strong>
         Total:
         ${rupiah(total)}
@@ -430,16 +450,12 @@ function showLoggedInView(user) {
     loggedIn.style.display =
       "block";
 
-
   const email =
-    user?.email ||
-    "-";
-
+    user?.email || "-";
 
   const name =
     user?.user_metadata?.full_name ||
     "Customer Nusantara";
-
 
   const accountName =
     document.querySelector(
@@ -451,16 +467,12 @@ function showLoggedInView(user) {
       "#accountEmail"
     );
 
-
   if (accountName) {
-
     accountName.textContent =
       `Nama: ${name}`;
   }
 
-
   if (accountEmail) {
-
     accountEmail.textContent =
       `Email: ${email}`;
   }
@@ -468,7 +480,7 @@ function showLoggedInView(user) {
 
 
 /* =========================
-   MESSAGE HELPER
+   MESSAGE
 ========================= */
 
 function setMessage(
@@ -502,27 +514,22 @@ async function resendVerification(
     return;
   }
 
-
   setMessage(
     messageElement,
     "Mengirim ulang email verifikasi..."
   );
-
 
   const {
     error
   } =
     await supabaseClient.auth.resend({
       type: "signup",
-
       email: email,
-
       options: {
         emailRedirectTo:
           LIVE_SITE_URL
       }
     });
-
 
   if (error) {
 
@@ -538,7 +545,6 @@ async function resendVerification(
 
     return;
   }
-
 
   setMessage(
     messageElement,
@@ -558,7 +564,6 @@ function showResendButton(
 
   if (!messageElement) return;
 
-
   const oldButton =
     document.querySelector(
       ".resend-verification-button"
@@ -567,12 +572,10 @@ function showResendButton(
   if (oldButton)
     oldButton.remove();
 
-
   const button =
     document.createElement(
       "button"
     );
-
 
   button.type =
     "button";
@@ -583,13 +586,11 @@ function showResendButton(
   button.textContent =
     "Kirim ulang email verifikasi";
 
-
   button.style.display =
     "block";
 
   button.style.marginTop =
     "10px";
-
 
   button.addEventListener(
     "click",
@@ -599,7 +600,6 @@ function showResendButton(
         messageElement
       )
   );
-
 
   messageElement.insertAdjacentElement(
     "afterend",
@@ -618,7 +618,6 @@ async function handleRegister(
 
   event.preventDefault();
 
-
   const name =
     document
       .querySelector(
@@ -626,7 +625,6 @@ async function handleRegister(
       )
       .value
       .trim();
-
 
   const email =
     document
@@ -636,7 +634,6 @@ async function handleRegister(
       .value
       .trim();
 
-
   const password =
     document
       .querySelector(
@@ -644,18 +641,15 @@ async function handleRegister(
       )
       .value;
 
-
   const message =
     document.querySelector(
       "#registerMessage"
     );
 
-
   setMessage(
     message,
     "Membuat akun..."
   );
-
 
   const {
     data,
@@ -673,14 +667,13 @@ async function handleRegister(
           LIVE_SITE_URL,
 
         data: {
-
           full_name:
             name
-
         }
-      }
-    });
 
+      }
+
+    });
 
   if (error) {
 
@@ -697,13 +690,11 @@ async function handleRegister(
     return;
   }
 
-
   document
     .querySelector(
       "#registerForm"
     )
     .reset();
-
 
   if (data.session) {
 
@@ -719,12 +710,10 @@ async function handleRegister(
     return;
   }
 
-
   setMessage(
     message,
     "Akun berhasil dibuat. Silakan cek email untuk verifikasi."
   );
-
 
   showResendButton(
     email,
@@ -743,7 +732,6 @@ async function handleLogin(
 
   event.preventDefault();
 
-
   const email =
     document
       .querySelector(
@@ -752,7 +740,6 @@ async function handleLogin(
       .value
       .trim();
 
-
   const password =
     document
       .querySelector(
@@ -760,31 +747,24 @@ async function handleLogin(
       )
       .value;
 
-
   const message =
     document.querySelector(
       "#loginMessage"
     );
-
 
   setMessage(
     message,
     "Memeriksa akun..."
   );
 
-
   const {
     data,
     error
   } =
     await supabaseClient.auth.signInWithPassword({
-
       email,
-
       password
-
     });
-
 
   if (error) {
 
@@ -793,17 +773,17 @@ async function handleLogin(
       error
     );
 
-
     setMessage(
       message,
       `Login gagal: ${error.message}`
     );
 
-
     if (
       error.message
         .toLowerCase()
-        .includes("email not confirmed")
+        .includes(
+          "email not confirmed"
+        )
     ) {
 
       showResendButton(
@@ -812,23 +792,19 @@ async function handleLogin(
       );
     }
 
-
     return;
   }
-
 
   setMessage(
     message,
     "Login berhasil."
   );
 
-
   document
     .querySelector(
       "#loginForm"
     )
     .reset();
-
 
   showLoggedInView(
     data.user
@@ -847,7 +823,6 @@ async function handleLogout() {
   } =
     await supabaseClient.auth.signOut();
 
-
   if (error) {
 
     console.error(
@@ -861,7 +836,6 @@ async function handleLogout() {
 
     return;
   }
-
 
   showLoginView();
 
@@ -882,10 +856,7 @@ async function checkSession() {
   } =
     await supabaseClient.auth.getSession();
 
-
-  if (
-    session?.user
-  ) {
+  if (session?.user) {
 
     showLoggedInView(
       session.user
@@ -905,24 +876,20 @@ function setupNavigation() {
       "#accountButton"
     );
 
-
   const viewAllButton =
     document.querySelector(
       "#viewAllButton"
     );
-
 
   const homeNavButton =
     document.querySelector(
       "#homeNavButton"
     );
 
-
   const ordersNavButton =
     document.querySelector(
       "#ordersNavButton"
     );
-
 
   const profileNavButton =
     document.querySelector(
@@ -945,10 +912,7 @@ function setupNavigation() {
         } =
           await supabaseClient.auth.getSession();
 
-
-        if (
-          session?.user
-        ) {
+        if (session?.user) {
 
           showLoggedInView(
             session.user
@@ -974,9 +938,7 @@ function setupNavigation() {
             "#products"
           );
 
-        if (
-          productsSection
-        ) {
+        if (productsSection) {
 
           productsSection.scrollIntoView({
             behavior: "smooth"
@@ -1015,7 +977,6 @@ function setupNavigation() {
         } =
           await supabaseClient.auth.getSession();
 
-
         if (!session) {
 
           openAccountPanel();
@@ -1024,7 +985,6 @@ function setupNavigation() {
 
           return;
         }
-
 
         alert(
           "Halaman pesanan akan kita bangun berikutnya."
@@ -1047,7 +1007,6 @@ function setupNavigation() {
         } =
           await supabaseClient.auth.getSession();
 
-
         if (!session) {
 
           openAccountPanel();
@@ -1056,7 +1015,6 @@ function setupNavigation() {
 
           return;
         }
-
 
         openAccountPanel();
 
@@ -1080,24 +1038,20 @@ function setupAuthForms() {
       "#loginForm"
     );
 
-
   const registerForm =
     document.querySelector(
       "#registerForm"
     );
-
 
   const logoutButton =
     document.querySelector(
       "#logoutButton"
     );
 
-
   const showRegisterButton =
     document.querySelector(
       "#showRegisterButton"
     );
-
 
   const showLoginButton =
     document.querySelector(
@@ -1152,7 +1106,7 @@ function setupAuthForms() {
 
 
 /* =========================
-   AUTH STATE CHANGE
+   AUTH STATE
 ========================= */
 
 supabaseClient.auth.onAuthStateChange(
@@ -1166,10 +1120,7 @@ supabaseClient.auth.onAuthStateChange(
       event
     );
 
-
-    if (
-      session?.user
-    ) {
+    if (session?.user) {
 
       showLoggedInView(
         session.user
@@ -1180,7 +1131,7 @@ supabaseClient.auth.onAuthStateChange(
 
 
 /* =========================
-   START APPLICATION
+   START
 ========================= */
 
 renderCart();
