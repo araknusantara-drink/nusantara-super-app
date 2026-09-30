@@ -2,7 +2,7 @@ const SUPABASE_URL =
   "https://xevkttwbzfosxmslnrku.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhldmt0dHdiemZvc3htc2xucmt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MDU5MzcsImV4cCI6MjEwNTk4MTkzN30.KI-1LcZ0mJIFbUHH6Br9LKphHns13mREGzpK9rOtzCc";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhldmt0d2J6Zm9zeG1zbG5ya3UiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc5MDQwNTkzNywiZXhwIjoyMTA1OTgxOTM3fQ.KI-1LcZ0mJIFbUHH6Br9LKphHns13mREGzpK9rOtzCc";
 
 const LIVE_SITE_URL =
   "https://araknusantara-drink.github.io/nusantara-super-app/";
@@ -19,9 +19,13 @@ let cart = JSON.parse(
   localStorage.getItem("nusantara_cart") || "[]"
 );
 
+let currentUser = null;
+let customerAddresses = [];
+let editingAddressId = null;
+
 
 /* =========================
-   FORMAT RUPIAH
+   FORMAT
 ========================= */
 
 const rupiah = (n) =>
@@ -29,7 +33,21 @@ const rupiah = (n) =>
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0
-  }).format(n);
+  }).format(Number(n) || 0);
+
+
+/* =========================
+   SECURITY
+========================= */
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 
 /* =========================
@@ -41,10 +59,12 @@ function iconForProduct(name) {
 
   const index =
     Math.abs(
-      [...name].reduce(
-        (sum, char) => sum + char.charCodeAt(0),
-        0
-      )
+      [...String(name || "")]
+        .reduce(
+          (sum, char) =>
+            sum + char.charCodeAt(0),
+          0
+        )
     ) % icons.length;
 
   return icons[index];
@@ -52,16 +72,18 @@ function iconForProduct(name) {
 
 
 /* =========================
-   RENDER PRODUCTS
+   PRODUCTS
 ========================= */
 
 function renderProducts() {
+
   const container =
     document.querySelector("#products");
 
   if (!container) return;
 
   if (!products.length) {
+
     container.innerHTML = `
       <div class="card">
         <strong>Belum ada produk aktif.</strong>
@@ -70,49 +92,50 @@ function renderProducts() {
         </div>
       </div>
     `;
+
     return;
   }
 
   container.innerHTML =
-    products.map(
-      (p) => `
+    products.map((p) => {
+
+      const image = p.image_url
+        ? `
+          <img
+            src="${escapeHtml(p.image_url)}"
+            alt="${escapeHtml(p.name)}"
+          >
+        `
+        : iconForProduct(p.name);
+
+      return `
         <article class="product">
 
           <div class="product-image">
-            ${
-              p.image_url
-                ? `
-                  <img
-                    src="${p.image_url}"
-                    alt="${p.name}"
-                  >
-                `
-                : iconForProduct(p.name)
-            }
+            ${image}
           </div>
 
-          <h3>${p.name}</h3>
+          <h3>
+            ${escapeHtml(p.name)}
+          </h3>
 
           <div class="price">
-            ${rupiah(Number(p.price))}
+            ${rupiah(p.price)}
           </div>
 
           <button
             class="add"
-            onclick="addToCart(${p.id})"
+            onclick="addToCart(${Number(p.id)})"
           >
             Tambah
           </button>
 
         </article>
-      `
-    ).join("");
+      `;
+
+    }).join("");
 }
 
-
-/* =========================
-   LOAD PRODUCTS
-========================= */
 
 async function loadProducts() {
 
@@ -139,14 +162,15 @@ async function loadProducts() {
           ascending: true
         });
 
-    console.log("SUPABASE PRODUCT RESULT:", result);
-
     const {
       data,
-      error,
-      status,
-      statusText
+      error
     } = result;
+
+    console.log(
+      "SUPABASE PRODUCT RESULT:",
+      result
+    );
 
     if (error) {
 
@@ -175,16 +199,10 @@ async function loadProducts() {
             word-break:break-word;
           ">
             <strong>Detail error:</strong><br>
-            ${error.message || "Tidak ada pesan error"}<br><br>
+            ${escapeHtml(error.message || "Tidak ada pesan error")}<br><br>
 
             <strong>Code:</strong>
-            ${error.code || "-"}<br>
-
-            <strong>Status:</strong>
-            ${status || "-"}<br>
-
-            <strong>Status text:</strong>
-            ${statusText || "-"}
+            ${escapeHtml(error.code || "-")}
           </div>
 
         </div>
@@ -229,7 +247,7 @@ async function loadProducts() {
           font-size:13px;
           word-break:break-word;
         ">
-          ${err.message || err}
+          ${escapeHtml(err.message || err)}
         </div>
 
       </div>
@@ -246,19 +264,23 @@ function addToCart(id) {
 
   const product =
     products.find(
-      (p) => p.id === id
+      (p) => Number(p.id) === Number(id)
     );
 
   if (!product) return;
 
   const existing =
     cart.find(
-      (item) => item.id === id
+      (item) =>
+        Number(item.id) === Number(id)
     );
 
   if (existing) {
+
     existing.qty++;
+
   } else {
+
     cart.push({
       id: product.id,
       name: product.name,
@@ -266,6 +288,7 @@ function addToCart(id) {
       image_url: product.image_url,
       qty: 1
     });
+
   }
 
   localStorage.setItem(
@@ -285,26 +308,31 @@ function renderCart() {
   if (!element) return;
 
   if (!cart.length) {
+
     element.textContent =
       "Keranjang masih kosong.";
+
     return;
   }
 
   const total =
     cart.reduce(
       (sum, item) =>
-        sum + item.price * item.qty,
+        sum +
+        Number(item.price) *
+        Number(item.qty),
       0
     );
 
   element.innerHTML =
     cart.map(
       (item) => `
-        ${item.name}
-        × ${item.qty}
+        ${escapeHtml(item.name)}
+        × ${Number(item.qty)}
         —
         ${rupiah(
-          item.price * item.qty
+          Number(item.price) *
+          Number(item.qty)
         )}
       `
     ).join("<br>") +
@@ -331,8 +359,7 @@ function openAccountPanel() {
 
   if (!panel) return;
 
-  panel.style.display =
-    "block";
+  panel.style.display = "block";
 
   panel.scrollIntoView({
     behavior: "smooth",
@@ -350,8 +377,7 @@ function closeAccountPanel() {
 
   if (!panel) return;
 
-  panel.style.display =
-    "none";
+  panel.style.display = "none";
 }
 
 
@@ -361,94 +387,42 @@ function closeAccountPanel() {
 
 function showLoginView() {
 
-  const login =
-    document.querySelector(
-      "#loginView"
-    );
+  document.querySelector("#loginView")
+    ?.style.setProperty("display", "block");
 
-  const register =
-    document.querySelector(
-      "#registerView"
-    );
+  document.querySelector("#registerView")
+    ?.style.setProperty("display", "none");
 
-  const loggedIn =
-    document.querySelector(
-      "#loggedInView"
-    );
-
-  if (login)
-    login.style.display =
-      "block";
-
-  if (register)
-    register.style.display =
-      "none";
-
-  if (loggedIn)
-    loggedIn.style.display =
-      "none";
+  document.querySelector("#loggedInView")
+    ?.style.setProperty("display", "none");
 }
 
 
 function showRegisterView() {
 
-  const login =
-    document.querySelector(
-      "#loginView"
-    );
+  document.querySelector("#loginView")
+    ?.style.setProperty("display", "none");
 
-  const register =
-    document.querySelector(
-      "#registerView"
-    );
+  document.querySelector("#registerView")
+    ?.style.setProperty("display", "block");
 
-  const loggedIn =
-    document.querySelector(
-      "#loggedInView"
-    );
-
-  if (login)
-    login.style.display =
-      "none";
-
-  if (register)
-    register.style.display =
-      "block";
-
-  if (loggedIn)
-    loggedIn.style.display =
-      "none";
+  document.querySelector("#loggedInView")
+    ?.style.setProperty("display", "none");
 }
 
 
-function showLoggedInView(user) {
+async function showLoggedInView(user) {
 
-  const login =
-    document.querySelector(
-      "#loginView"
-    );
+  currentUser = user;
 
-  const register =
-    document.querySelector(
-      "#registerView"
-    );
+  document.querySelector("#loginView")
+    ?.style.setProperty("display", "none");
 
-  const loggedIn =
-    document.querySelector(
-      "#loggedInView"
-    );
+  document.querySelector("#registerView")
+    ?.style.setProperty("display", "none");
 
-  if (login)
-    login.style.display =
-      "none";
-
-  if (register)
-    register.style.display =
-      "none";
-
-  if (loggedIn)
-    loggedIn.style.display =
-      "block";
+  document.querySelector("#loggedInView")
+    ?.style.setProperty("display", "block");
 
   const email =
     user?.email || "-";
@@ -458,14 +432,10 @@ function showLoggedInView(user) {
     "Customer Nusantara";
 
   const accountName =
-    document.querySelector(
-      "#accountName"
-    );
+    document.querySelector("#accountName");
 
   const accountEmail =
-    document.querySelector(
-      "#accountEmail"
-    );
+    document.querySelector("#accountEmail");
 
   if (accountName) {
     accountName.textContent =
@@ -476,6 +446,10 @@ function showLoggedInView(user) {
     accountEmail.textContent =
       `Email: ${email}`;
   }
+
+  await loadCustomerProfile(user);
+
+  await loadAddresses();
 }
 
 
@@ -524,7 +498,7 @@ async function resendVerification(
   } =
     await supabaseClient.auth.resend({
       type: "signup",
-      email: email,
+      email,
       options: {
         emailRedirectTo:
           LIVE_SITE_URL
@@ -553,10 +527,6 @@ async function resendVerification(
 }
 
 
-/* =========================
-   RESEND BUTTON
-========================= */
-
 function showResendButton(
   email,
   messageElement
@@ -573,12 +543,9 @@ function showResendButton(
     oldButton.remove();
 
   const button =
-    document.createElement(
-      "button"
-    );
+    document.createElement("button");
 
-  button.type =
-    "button";
+  button.type = "button";
 
   button.className =
     "text-btn resend-verification-button";
@@ -586,11 +553,8 @@ function showResendButton(
   button.textContent =
     "Kirim ulang email verifikasi";
 
-  button.style.display =
-    "block";
-
-  button.style.marginTop =
-    "10px";
+  button.style.display = "block";
+  button.style.marginTop = "10px";
 
   button.addEventListener(
     "click",
@@ -612,33 +576,25 @@ function showResendButton(
    REGISTER
 ========================= */
 
-async function handleRegister(
-  event
-) {
+async function handleRegister(event) {
 
   event.preventDefault();
 
   const name =
     document
-      .querySelector(
-        "#registerName"
-      )
+      .querySelector("#registerName")
       .value
       .trim();
 
   const email =
     document
-      .querySelector(
-        "#registerEmail"
-      )
+      .querySelector("#registerEmail")
       .value
       .trim();
 
   const password =
     document
-      .querySelector(
-        "#registerPassword"
-      )
+      .querySelector("#registerPassword")
       .value;
 
   const message =
@@ -662,17 +618,13 @@ async function handleRegister(
       password,
 
       options: {
-
         emailRedirectTo:
           LIVE_SITE_URL,
 
         data: {
-          full_name:
-            name
+          full_name: name
         }
-
       }
-
     });
 
   if (error) {
@@ -691,9 +643,7 @@ async function handleRegister(
   }
 
   document
-    .querySelector(
-      "#registerForm"
-    )
+    .querySelector("#registerForm")
     .reset();
 
   if (data.session) {
@@ -703,7 +653,7 @@ async function handleRegister(
       "Akun berhasil dibuat dan langsung aktif."
     );
 
-    showLoggedInView(
+    await showLoggedInView(
       data.user
     );
 
@@ -726,25 +676,19 @@ async function handleRegister(
    LOGIN
 ========================= */
 
-async function handleLogin(
-  event
-) {
+async function handleLogin(event) {
 
   event.preventDefault();
 
   const email =
     document
-      .querySelector(
-        "#loginEmail"
-      )
+      .querySelector("#loginEmail")
       .value
       .trim();
 
   const password =
     document
-      .querySelector(
-        "#loginPassword"
-      )
+      .querySelector("#loginPassword")
       .value;
 
   const message =
@@ -781,9 +725,7 @@ async function handleLogin(
     if (
       error.message
         .toLowerCase()
-        .includes(
-          "email not confirmed"
-        )
+        .includes("email not confirmed")
     ) {
 
       showResendButton(
@@ -801,12 +743,10 @@ async function handleLogin(
   );
 
   document
-    .querySelector(
-      "#loginForm"
-    )
+    .querySelector("#loginForm")
     .reset();
 
-  showLoggedInView(
+  await showLoggedInView(
     data.user
   );
 }
@@ -837,9 +777,788 @@ async function handleLogout() {
     return;
   }
 
+  currentUser = null;
+  customerAddresses = [];
+  editingAddressId = null;
+
   showLoginView();
 
   closeAccountPanel();
+}
+
+
+/* =========================
+   CUSTOMER PROFILE
+========================= */
+
+async function loadCustomerProfile(user) {
+
+  if (!user) return;
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from("profiles")
+      .select(
+        "id, full_name, phone, role, avatar_url, is_active"
+      )
+      .eq("id", user.id)
+      .maybeSingle();
+
+  if (error) {
+
+    console.error(
+      "Profile load error:",
+      error
+    );
+
+    return;
+  }
+
+  const fullName =
+    data?.full_name ||
+    user.user_metadata?.full_name ||
+    "";
+
+  const phone =
+    data?.phone || "";
+
+  const profileFullName =
+    document.querySelector(
+      "#profileFullName"
+    );
+
+  const profilePhone =
+    document.querySelector(
+      "#profilePhone"
+    );
+
+  if (profileFullName) {
+    profileFullName.value =
+      fullName;
+  }
+
+  if (profilePhone) {
+    profilePhone.value =
+      phone;
+  }
+
+  const accountName =
+    document.querySelector(
+      "#accountName"
+    );
+
+  if (accountName) {
+
+    accountName.textContent =
+      `Nama: ${fullName || "Customer Nusantara"}`;
+  }
+}
+
+
+async function handleProfileSave(event) {
+
+  event.preventDefault();
+
+  if (!currentUser) return;
+
+  const fullName =
+    document
+      .querySelector("#profileFullName")
+      .value
+      .trim();
+
+  const phone =
+    document
+      .querySelector("#profilePhone")
+      .value
+      .trim();
+
+  const message =
+    document.querySelector(
+      "#profileMessage"
+    );
+
+  if (!fullName) {
+
+    setMessage(
+      message,
+      "Nama lengkap wajib diisi."
+    );
+
+    return;
+  }
+
+  setMessage(
+    message,
+    "Menyimpan profil..."
+  );
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .from("profiles")
+      .update({
+        full_name: fullName,
+        phone: phone || null
+      })
+      .eq("id", currentUser.id);
+
+  if (error) {
+
+    console.error(
+      "Profile update error:",
+      error
+    );
+
+    setMessage(
+      message,
+      `Gagal menyimpan profil: ${error.message}`
+    );
+
+    return;
+  }
+
+  setMessage(
+    message,
+    "Profil berhasil disimpan."
+  );
+
+  const accountName =
+    document.querySelector(
+      "#accountName"
+    );
+
+  if (accountName) {
+
+    accountName.textContent =
+      `Nama: ${fullName}`;
+  }
+}
+
+
+/* =========================
+   ADDRESSES
+========================= */
+
+async function loadAddresses() {
+
+  if (!currentUser) return;
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from("addresses")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("is_default", {
+        ascending: false
+      })
+      .order("id", {
+        ascending: false
+      });
+
+  if (error) {
+
+    console.error(
+      "Address load error:",
+      error
+    );
+
+    setMessage(
+      document.querySelector(
+        "#addressMessage"
+      ),
+      `Gagal memuat alamat: ${error.message}`
+    );
+
+    return;
+  }
+
+  customerAddresses =
+    data || [];
+
+  renderAddresses();
+}
+
+
+function renderAddresses() {
+
+  const container =
+    document.querySelector(
+      "#addressList"
+    );
+
+  if (!container) return;
+
+  if (!customerAddresses.length) {
+
+    container.innerHTML =
+      `<p>Belum ada alamat tersimpan.</p>`;
+
+    return;
+  }
+
+  container.innerHTML =
+    customerAddresses.map(
+      (address) => `
+        <div
+          class="card"
+          style="margin:10px 0;"
+        >
+
+          <strong>
+            ${escapeHtml(address.label)}
+          </strong>
+
+          ${
+            address.is_default
+              ? `<span> ⭐ Alamat utama</span>`
+              : ""
+          }
+
+          <p>
+            ${escapeHtml(address.recipient_name)}
+            ·
+            ${escapeHtml(address.phone)}
+          </p>
+
+          <p>
+            ${escapeHtml(address.address_line)}
+          </p>
+
+          <p>
+            ${escapeHtml(address.city)},
+            ${escapeHtml(address.province)}
+            ${address.postal_code
+              ? ` ${escapeHtml(address.postal_code)}`
+              : ""}
+          </p>
+
+          ${
+            address.notes
+              ? `
+                <p>
+                  Catatan:
+                  ${escapeHtml(address.notes)}
+                </p>
+              `
+              : ""
+          }
+
+          <button
+            type="button"
+            class="text-btn"
+            onclick="editAddress(${Number(address.id)})"
+          >
+            Edit
+          </button>
+
+          <button
+            type="button"
+            class="text-btn"
+            onclick="makeDefaultAddress(${Number(address.id)})"
+            ${
+              address.is_default
+                ? "disabled"
+                : ""
+            }
+          >
+            Jadikan utama
+          </button>
+
+          <button
+            type="button"
+            class="text-btn"
+            onclick="deleteAddress(${Number(address.id)})"
+          >
+            Hapus
+          </button>
+
+        </div>
+      `
+    ).join("");
+}
+
+
+function resetAddressForm() {
+
+  editingAddressId = null;
+
+  const form =
+    document.querySelector(
+      "#addressForm"
+    );
+
+  if (form) {
+    form.reset();
+  }
+
+  const label =
+    document.querySelector(
+      "#addressLabel"
+    );
+
+  if (label) {
+    label.value = "Rumah";
+  }
+
+  const title =
+    document.querySelector(
+      "#addressFormTitle"
+    );
+
+  if (title) {
+    title.textContent =
+      "Tambah alamat";
+  }
+
+  const cancelButton =
+    document.querySelector(
+      "#cancelAddressButton"
+    );
+
+  if (cancelButton) {
+    cancelButton.style.display =
+      "none";
+  }
+
+  setMessage(
+    document.querySelector(
+      "#addressMessage"
+    ),
+    ""
+  );
+}
+
+
+function editAddress(id) {
+
+  const address =
+    customerAddresses.find(
+      (item) =>
+        Number(item.id) === Number(id)
+    );
+
+  if (!address) return;
+
+  editingAddressId =
+    address.id;
+
+  document.querySelector(
+    "#addressLabel"
+  ).value =
+    address.label || "Rumah";
+
+  document.querySelector(
+    "#addressRecipient"
+  ).value =
+    address.recipient_name || "";
+
+  document.querySelector(
+    "#addressPhone"
+  ).value =
+    address.phone || "";
+
+  document.querySelector(
+    "#addressLine"
+  ).value =
+    address.address_line || "";
+
+  document.querySelector(
+    "#addressCity"
+  ).value =
+    address.city || "";
+
+  document.querySelector(
+    "#addressProvince"
+  ).value =
+    address.province || "";
+
+  document.querySelector(
+    "#addressPostalCode"
+  ).value =
+    address.postal_code || "";
+
+  document.querySelector(
+    "#addressNotes"
+  ).value =
+    address.notes || "";
+
+  document.querySelector(
+    "#addressDefault"
+  ).checked =
+    Boolean(address.is_default);
+
+  const title =
+    document.querySelector(
+      "#addressFormTitle"
+    );
+
+  if (title) {
+    title.textContent =
+      "Edit alamat";
+  }
+
+  const cancelButton =
+    document.querySelector(
+      "#cancelAddressButton"
+    );
+
+  if (cancelButton) {
+    cancelButton.style.display =
+      "block";
+  }
+
+  document.querySelector(
+    "#addressForm"
+  )?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+
+async function handleAddressSave(event) {
+
+  event.preventDefault();
+
+  if (!currentUser) return;
+
+  const message =
+    document.querySelector(
+      "#addressMessage"
+    );
+
+  const addressData = {
+
+    user_id:
+      currentUser.id,
+
+    label:
+      document
+        .querySelector("#addressLabel")
+        .value
+        .trim(),
+
+    recipient_name:
+      document
+        .querySelector("#addressRecipient")
+        .value
+        .trim(),
+
+    phone:
+      document
+        .querySelector("#addressPhone")
+        .value
+        .trim(),
+
+    address_line:
+      document
+        .querySelector("#addressLine")
+        .value
+        .trim(),
+
+    city:
+      document
+        .querySelector("#addressCity")
+        .value
+        .trim(),
+
+    province:
+      document
+        .querySelector("#addressProvince")
+        .value
+        .trim(),
+
+    postal_code:
+      document
+        .querySelector("#addressPostalCode")
+        .value
+        .trim() || null,
+
+    notes:
+      document
+        .querySelector("#addressNotes")
+        .value
+        .trim() || null,
+
+    is_default:
+      document.querySelector(
+        "#addressDefault"
+      ).checked
+  };
+
+  if (
+    !addressData.label ||
+    !addressData.recipient_name ||
+    !addressData.phone ||
+    !addressData.address_line ||
+    !addressData.city ||
+    !addressData.province
+  ) {
+
+    setMessage(
+      message,
+      "Lengkapi data alamat terlebih dahulu."
+    );
+
+    return;
+  }
+
+  setMessage(
+    message,
+    "Menyimpan alamat..."
+  );
+
+
+  /*
+    Kalau dijadikan alamat utama,
+    alamat utama lama dibuat nonaktif
+    terlebih dahulu.
+  */
+
+  if (addressData.is_default) {
+
+    const {
+      error
+    } =
+      await supabaseClient
+        .from("addresses")
+        .update({
+          is_default: false
+        })
+        .eq(
+          "user_id",
+          currentUser.id
+        );
+
+    if (error) {
+
+      console.error(
+        "Default address reset error:",
+        error
+      );
+
+      setMessage(
+        message,
+        `Gagal mengatur alamat utama: ${error.message}`
+      );
+
+      return;
+    }
+  }
+
+
+  let result;
+
+  if (editingAddressId) {
+
+    result =
+      await supabaseClient
+        .from("addresses")
+        .update(addressData)
+        .eq(
+          "id",
+          editingAddressId
+        )
+        .eq(
+          "user_id",
+          currentUser.id
+        );
+
+  } else {
+
+    result =
+      await supabaseClient
+        .from("addresses")
+        .insert(addressData);
+  }
+
+
+  if (result.error) {
+
+    console.error(
+      "Address save error:",
+      result.error
+    );
+
+    setMessage(
+      message,
+      `Gagal menyimpan alamat: ${result.error.message}`
+    );
+
+    return;
+  }
+
+  setMessage(
+    message,
+    "Alamat berhasil disimpan."
+  );
+
+  resetAddressForm();
+
+  await loadAddresses();
+}
+
+
+async function deleteAddress(id) {
+
+  if (!currentUser) return;
+
+  const address =
+    customerAddresses.find(
+      (item) =>
+        Number(item.id) === Number(id)
+    );
+
+  if (!address) return;
+
+  const confirmed =
+    window.confirm(
+      `Hapus alamat "${address.label}"?`
+    );
+
+  if (!confirmed) return;
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .from("addresses")
+      .delete()
+      .eq(
+        "id",
+        id
+      )
+      .eq(
+        "user_id",
+        currentUser.id
+      );
+
+  if (error) {
+
+    console.error(
+      "Delete address error:",
+      error
+    );
+
+    alert(
+      `Gagal menghapus alamat: ${error.message}`
+    );
+
+    return;
+  }
+
+  await loadAddresses();
+}
+
+
+async function makeDefaultAddress(id) {
+
+  if (!currentUser) return;
+
+  const {
+    error: resetError
+  } =
+    await supabaseClient
+      .from("addresses")
+      .update({
+        is_default: false
+      })
+      .eq(
+        "user_id",
+        currentUser.id
+      );
+
+  if (resetError) {
+
+    alert(
+      `Gagal mengatur alamat: ${resetError.message}`
+    );
+
+    return;
+  }
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .from("addresses")
+      .update({
+        is_default: true
+      })
+      .eq(
+        "id",
+        id
+      )
+      .eq(
+        "user_id",
+        currentUser.id
+      );
+
+  if (error) {
+
+    alert(
+      `Gagal menjadikan alamat utama: ${error.message}`
+    );
+
+    return;
+  }
+
+  await loadAddresses();
+}
+
+
+/* =========================
+   CUSTOMER FORMS
+========================= */
+
+function setupCustomerForms() {
+
+  const profileForm =
+    document.querySelector(
+      "#profileForm"
+    );
+
+  const addressForm =
+    document.querySelector(
+      "#addressForm"
+    );
+
+  const cancelAddressButton =
+    document.querySelector(
+      "#cancelAddressButton"
+    );
+
+  if (profileForm) {
+
+    profileForm.addEventListener(
+      "submit",
+      handleProfileSave
+    );
+  }
+
+  if (addressForm) {
+
+    addressForm.addEventListener(
+      "submit",
+      handleAddressSave
+    );
+  }
+
+  if (cancelAddressButton) {
+
+    cancelAddressButton.addEventListener(
+      "click",
+      resetAddressForm
+    );
+  }
 }
 
 
@@ -858,7 +1577,7 @@ async function checkSession() {
 
   if (session?.user) {
 
-    showLoggedInView(
+    await showLoggedInView(
       session.user
     );
   }
@@ -914,7 +1633,7 @@ function setupNavigation() {
 
         if (session?.user) {
 
-          showLoggedInView(
+          await showLoggedInView(
             session.user
           );
 
@@ -938,12 +1657,9 @@ function setupNavigation() {
             "#products"
           );
 
-        if (productsSection) {
-
-          productsSection.scrollIntoView({
-            behavior: "smooth"
-          });
-        }
+        productsSection?.scrollIntoView({
+          behavior: "smooth"
+        });
       }
     );
   }
@@ -1018,7 +1734,7 @@ function setupNavigation() {
 
         openAccountPanel();
 
-        showLoggedInView(
+        await showLoggedInView(
           session.user
         );
       }
@@ -1110,7 +1826,7 @@ function setupAuthForms() {
 ========================= */
 
 supabaseClient.auth.onAuthStateChange(
-  (
+  async (
     event,
     session
   ) => {
@@ -1122,9 +1838,19 @@ supabaseClient.auth.onAuthStateChange(
 
     if (session?.user) {
 
-      showLoggedInView(
+      await showLoggedInView(
         session.user
       );
+
+    } else if (
+      event === "SIGNED_OUT"
+    ) {
+
+      currentUser = null;
+      customerAddresses = [];
+      editingAddressId = null;
+
+      showLoginView();
     }
   }
 );
@@ -1139,6 +1865,8 @@ renderCart();
 setupNavigation();
 
 setupAuthForms();
+
+setupCustomerForms();
 
 checkSession();
 
