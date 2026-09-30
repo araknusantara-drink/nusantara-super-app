@@ -26,7 +26,7 @@
 
 
 <!-- =========================
-     ACCOUNT / LOGIN AREA
+     ACCOUNT
 ========================= -->
 
 <section
@@ -47,9 +47,7 @@
 
     <form id="loginForm">
 
-      <label for="loginEmail">
-        Email
-      </label>
+      <label for="loginEmail">Email</label>
 
       <input
         id="loginEmail"
@@ -58,9 +56,7 @@
         required
       >
 
-      <label for="loginPassword">
-        Password
-      </label>
+      <label for="loginPassword">Password</label>
 
       <input
         id="loginPassword"
@@ -69,10 +65,7 @@
         required
       >
 
-      <button
-        type="submit"
-        class="add"
-      >
+      <button type="submit" class="add">
         Masuk
       </button>
 
@@ -93,10 +86,7 @@
 
   <!-- REGISTER -->
 
-  <div
-    id="registerView"
-    style="display:none;"
-  >
+  <div id="registerView" style="display:none;">
 
     <h2>Buat akun</h2>
 
@@ -106,9 +96,7 @@
 
     <form id="registerForm">
 
-      <label for="registerName">
-        Nama lengkap
-      </label>
+      <label for="registerName">Nama lengkap</label>
 
       <input
         id="registerName"
@@ -117,9 +105,7 @@
         required
       >
 
-      <label for="registerEmail">
-        Email
-      </label>
+      <label for="registerEmail">Email</label>
 
       <input
         id="registerEmail"
@@ -128,9 +114,7 @@
         required
       >
 
-      <label for="registerPassword">
-        Password
-      </label>
+      <label for="registerPassword">Password</label>
 
       <input
         id="registerPassword"
@@ -140,10 +124,7 @@
         required
       >
 
-      <button
-        type="submit"
-        class="add"
-      >
+      <button type="submit" class="add">
         Daftar
       </button>
 
@@ -162,22 +143,190 @@
   </div>
 
 
-  <!-- ACCOUNT LOGGED IN -->
+  <!-- LOGGED IN -->
 
-  <div
-    id="loggedInView"
-    style="display:none;"
-  >
+  <div id="loggedInView" style="display:none;">
 
     <h2>Akun saya</h2>
 
-    <p id="accountName">
-      -
-    </p>
+    <p id="accountName">-</p>
 
-    <p id="accountEmail">
-      -
-    </p>
+    <p id="accountEmail">-</p>
+
+    <hr>
+
+
+    <!-- PROFILE -->
+
+    <h3>Profil</h3>
+
+    <form id="profileForm">
+
+      <label for="profileFullName">
+        Nama lengkap
+      </label>
+
+      <input
+        id="profileFullName"
+        type="text"
+        placeholder="Nama lengkap"
+        required
+      >
+
+      <label for="profilePhone">
+        Nomor telepon
+      </label>
+
+      <input
+        id="profilePhone"
+        type="tel"
+        placeholder="08xxxxxxxxxx"
+      >
+
+      <button
+        type="submit"
+        class="add"
+      >
+        Simpan profil
+      </button>
+
+    </form>
+
+    <p id="profileMessage"></p>
+
+    <hr>
+
+
+    <!-- ADDRESS -->
+
+    <h3>Alamat pengiriman</h3>
+
+    <div id="addressList">
+      Belum ada alamat.
+    </div>
+
+    <br>
+
+    <h4 id="addressFormTitle">
+      Tambah alamat
+    </h4>
+
+    <form id="addressForm">
+
+      <label for="addressLabel">
+        Label
+      </label>
+
+      <input
+        id="addressLabel"
+        type="text"
+        placeholder="Rumah / Kantor"
+        value="Rumah"
+        required
+      >
+
+      <label for="addressRecipient">
+        Nama penerima
+      </label>
+
+      <input
+        id="addressRecipient"
+        type="text"
+        placeholder="Nama penerima"
+        required
+      >
+
+      <label for="addressPhone">
+        Nomor telepon
+      </label>
+
+      <input
+        id="addressPhone"
+        type="tel"
+        placeholder="08xxxxxxxxxx"
+        required
+      >
+
+      <label for="addressLine">
+        Alamat lengkap
+      </label>
+
+      <textarea
+        id="addressLine"
+        placeholder="Nama jalan, nomor rumah, RT/RW..."
+        required
+      ></textarea>
+
+      <label for="addressCity">
+        Kota / Kabupaten
+      </label>
+
+      <input
+        id="addressCity"
+        type="text"
+        placeholder="Contoh: Jakarta Selatan"
+        required
+      >
+
+      <label for="addressProvince">
+        Provinsi
+      </label>
+
+      <input
+        id="addressProvince"
+        type="text"
+        placeholder="Contoh: DKI Jakarta"
+        required
+      >
+
+      <label for="addressPostalCode">
+        Kode pos
+      </label>
+
+      <input
+        id="addressPostalCode"
+        type="text"
+        placeholder="12345"
+      >
+
+      <label for="addressNotes">
+        Catatan
+      </label>
+
+      <textarea
+        id="addressNotes"
+        placeholder="Patokan rumah, dll."
+      ></textarea>
+
+      <label>
+        <input
+          id="addressDefault"
+          type="checkbox"
+        >
+        Jadikan alamat utama
+      </label>
+
+      <button
+        type="submit"
+        class="add"
+      >
+        Simpan alamat
+      </button>
+
+      <button
+        type="button"
+        class="text-btn"
+        id="cancelAddressButton"
+        style="display:none;"
+      >
+        Batal edit
+      </button>
+
+    </form>
+
+    <p id="addressMessage"></p>
+
+    <hr>
 
     <button
       type="button"
@@ -191,6 +340,10 @@
 
 </section>
 
+
+<!-- =========================
+     MAIN
+========================= -->
 
 <main class="container">
 
@@ -247,6 +400,10 @@
 </main>
 
 
+<!-- =========================
+     BOTTOM NAV
+========================= -->
+
 <nav class="bottom-nav">
 
   <button
@@ -271,10 +428,8 @@
 </nav>
 
 
-<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Aplikasi Nusantara Drink -->
 <script src="app.js"></script>
 
 </body>
