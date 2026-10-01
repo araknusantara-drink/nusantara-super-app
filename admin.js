@@ -736,7 +736,7 @@ async function loadOrders() {
     result.error
       ? `
         <tr>
-          <td colspan="5">
+          <td colspan="7">
             ${esc(result.error.message)}
           </td>
         </tr>
@@ -1015,6 +1015,7 @@ async function loadCustomers() {
 
         const text = `
           ${customer.full_name || ""}
+          ${customer.email || ""}
           ${customer.phone || ""}
           ${customer.id}
         `.toLowerCase();
@@ -1041,6 +1042,12 @@ async function loadCustomers() {
           <td>
             ${esc(
               customer.full_name || "-"
+            )}
+          </td>
+
+          <td>
+            ${esc(
+              customer.email || "-"
             )}
           </td>
 
