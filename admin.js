@@ -993,14 +993,12 @@ async function saveMovement(event) {
 
 async function loadCustomers() {
 
-  const { data, error } = await db.functions.invoke("admin-customers", {
-    body: { action: "list" }
-  });
+  const { data, error } = await db.rpc("admin_list_customers");
 
-  const result = {
-    data: data?.customers || [],
-    error
-  };
+const result = {
+  data: data || [],
+  error
+};
 
 
   const search =
@@ -1086,7 +1084,9 @@ async function loadCustomers() {
 }
 window.deleteCustomer = async function(id) {
   if (!confirm("Hapus customer ini? Jika punya riwayat pesanan, akun akan DINONAKTIFKAN dan akses login diblokir agar histori transaksi tetap aman.")) return;
-  const { data, error } = await db.functions.invoke("admin-customers", { body: { action:"delete", user_id:id } });
+  const { data, error } = await db.rpc("admin_delete_customer", {
+  p_user_id: id
+});
   if (error) { alert(error.message || "Gagal memproses customer."); return; }
   if (data?.error) { alert(data.error); return; }
   alert(data?.message || "Berhasil.");
