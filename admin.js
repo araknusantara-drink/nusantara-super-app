@@ -841,6 +841,11 @@ async function loadMovements() {
                 ).toLocaleString("id-ID")}
               </td>
 
+              <td>
+                <button onclick="editMovement(${move.id})">Edit</button>
+                <button class="danger" onclick="deleteMovement(${move.id})">Hapus</button>
+              </td>
+
             </tr>
 
           `;
@@ -849,6 +854,31 @@ async function loadMovements() {
 
 }
 
+window.editMovement = async function(id) {
+  const result = await db.from("inventory_movements").select("id,type,quantity,note,product_id").eq("id", id).maybeSingle();
+  if (result.error || !result.data) { alert(result.error?.message || "Pergerakan tidak ditemukan."); return; }
+  const movement = result.data;
+  const type = prompt("Tipe (in / out):", movement.type);
+  if (type === null) return;
+  const normalizedType = type.trim().toLowerCase();
+  if (!["in","out"].includes(normalizedType)) { alert("Tipe harus in atau out."); return; }
+  const qtyText = prompt("Jumlah:", String(movement.quantity));
+  if (qtyText === null) return;
+  const quantity = Number(qtyText);
+  if (!Number.isInteger(quantity) || quantity <= 0) { alert("Jumlah harus bilangan bulat lebih dari 0."); return; }
+  const note = prompt("Catatan:", movement.note || "");
+  if (note === null) return;
+  const rpc = await db.rpc("admin_update_inventory_movement", { p_id:id, p_type:normalizedType, p_quantity:quantity, p_note:note.trim() || null });
+  if (rpc.error) { alert(rpc.error.message); return; }
+  await loadProducts(); await loadMovements();
+};
+
+window.deleteMovement = async function(id) {
+  if (!confirm("Hapus pergerakan ini? Stok produk juga akan dikoreksi otomatis.")) return;
+  const rpc = await db.rpc("admin_delete_inventory_movement", { p_id:id });
+  if (rpc.error) { alert(rpc.error.message); return; }
+  await loadProducts(); await loadMovements();
+};
 
 async function saveMovement(event) {
 
@@ -963,17 +993,14 @@ async function saveMovement(event) {
 
 async function loadCustomers() {
 
-  const result =
-    await db
-      .from("profiles")
-      .select(
-        "id,full_name,phone,role,is_active,created_at"
-      )
-      .order(
-        "created_at",
-        { ascending: false }
-      )
-      .limit(500);
+  const { data, error } = await db.functions.invoke("admin-customers", {
+    body: { action: "list" }
+  });
+
+  const result = {
+    data: data?.customers || [],
+    error
+  };
 
 
   const search =
@@ -1041,11 +1068,23 @@ async function loadCustomers() {
             )}
           </td>
 
+          <td>
+            <button class="danger" onclick="deleteCustomer('${customer.id}')">Hapus</button>
+          </td>
+
         </tr>
 
       `).join("");
 
 }
+window.deleteCustomer = async function(id) {
+  if (!confirm("Hapus customer ini? Jika punya riwayat pesanan, akun akan DINONAKTIFKAN dan akses login diblokir agar histori transaksi tetap aman.")) return;
+  const { data, error } = await db.functions.invoke("admin-customers", { body: { action:"delete", user_id:id } });
+  if (error) { alert(error.message || "Gagal memproses customer."); return; }
+  if (data?.error) { alert(data.error); return; }
+  alert(data?.message || "Berhasil.");
+  await loadCustomers();
+};
 
 
 /* =========================
