@@ -1,47 +1,652 @@
-<!doctype html><html lang="id"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nusantara Drink — Owner Dashboard</title><link rel="stylesheet" href="admin.css"></head><body>
-<header><div><small>NUSANTARA DRINK</small><h1>Owner Dashboard</h1></div><button id="logout">Keluar</button></header>
-<main><div id="access">Memeriksa akses...</div><div id="app" hidden>
-<nav id="tabs">
-<button data-tab="dashboard">📊 Dashboard</button><button data-tab="products">📦 Produk</button>
-<button data-tab="orders">📋 Pesanan</button><button data-tab="stock">📈 Stok</button>
-<button data-tab="customers">👥 Customer</button><button data-tab="payments">💰 Pembayaran</button>
-<button data-tab="shifts">🔄 Shift</button><button data-tab="settings">⚙️ Pengaturan</button></nav>
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<section id="dashboard" class="tab"><div class="filters"><select id="period"><option value="day">Hari ini</option><option value="month">Bulan ini</option><option value="year">Tahun ini</option></select><button id="refreshDash">Refresh</button></div>
-<div class="stats"><article>Omzet<strong id="sales">Rp0</strong></article><article>Pesanan<strong id="orderCount">0</strong></article><article>Produk aktif<strong id="activeProducts">0</strong></article><article>Stok<strong id="stockCount">0</strong></article></div></section>
+  <title>Nusantara Drink — Owner Dashboard</title>
 
-<section id="products" class="tab" hidden><div class="title"><h2>Produk</h2><button id="addProduct">+ Tambah</button></div>
-<form id="productForm" hidden class="card grid"><input type="hidden" id="pid">
-<label>Nama<input id="pname" required></label><label>SKU<input id="psku"></label><label>Harga<input id="pprice" type="number" min="0" required></label>
-<label>Harga modal<input id="pcost" type="number" min="0" value="0"></label><label>Stok<input id="pstock" type="number" min="0" value="0"></label>
-<label>Min stok<input id="pmin" type="number" min="0" value="0"></label><label class="wide">Deskripsi<textarea id="pdesc"></textarea></label>
-<label class="wide">URL gambar<input id="pimage"></label><label>Aktif<select id="pactive"><option value="true">Ya</option><option value="false">Tidak</option></select></label>
-<div class="wide"><button>Simpan</button><button type="button" id="cancelProduct">Batal</button></div><p id="pmsg" class="wide"></p></form>
-<div class="table"><table><thead><tr><th>Produk</th><th>SKU</th><th>Harga</th><th>Stok</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="productRows"></tbody></table></div></section>
+  <link rel="stylesheet" href="admin.css">
 
-<section id="orders" class="tab" hidden><div class="filters"><input type="date" id="ofrom"><input type="date" id="oto"><select id="ostatus"><option value="">Semua status</option><option>pending</option><option>confirmed</option><option>processing</option><option>shipped</option><option>delivered</option><option>cancelled</option><option>refunded</option></select><button id="refreshOrders">Filter</button></div>
-<div class="table"><table><thead><tr><th>Order</th><th>User</th><th>Status</th><th>Total</th><th>Tanggal</th></tr></thead><tbody id="orderRows"></tbody></table></div></section>
+  <style>
+    #access {
+      padding: 32px;
+      font-size: 18px;
+    }
 
-<section id="stock" class="tab" hidden><div class="title"><h2>Stok & Pergerakan</h2><button id="addMove">+ Pergerakan</button></div>
-<form id="moveForm" hidden class="card grid"><label>Produk<select id="mproduct"></select></label><label>Tipe<select id="mtype"><option value="in">Masuk</option><option value="out">Keluar</option><option value="adjustment">Penyesuaian</option></select></label>
-<label>Jumlah<input id="mqty" type="number" min="1" required></label><label class="wide">Catatan<textarea id="mnote"></textarea></label><div class="wide"><button>Simpan</button><button type="button" id="cancelMove">Batal</button></div><p id="mmsg" class="wide"></p></form>
-<div class="table"><table><thead><tr><th>Produk</th><th>Tipe</th><th>Jumlah</th><th>Catatan</th><th>Tanggal</th></tr></thead><tbody id="moveRows"></tbody></table></div></section>
+    #access.error {
+      color: #b00020;
+      background: #fff0f0;
+      margin: 20px;
+      border-radius: 12px;
+    }
 
-<section id="customers" class="tab" hidden><div class="filters"><input id="customerSearch" placeholder="Cari nama / telepon / ID"><button id="refreshCustomers">Refresh</button></div>
-<div class="table"><table><thead><tr><th>Nama</th><th>Telepon</th><th>Role</th><th>Aktif</th><th>Dibuat</th></tr></thead><tbody id="customerRows"></tbody></table></div>
-<p class="note">Penghapusan akun autentikasi tidak dilakukan langsung dari browser; gunakan fungsi backend ter-audit untuk tindakan tersebut.</p></section>
+    #app[hidden] {
+      display: none !important;
+    }
 
-<section id="payments" class="tab" hidden><div class="filters"><select id="payPeriod"><option value="today">Transaksi hari ini</option><option value="month">Bulan ini</option><option value="year">Tahun ini</option><option value="all">Semua</option></select>
-<select id="paySort"><option value="date_desc">Tanggal terbaru</option><option value="date_asc">Tanggal terlama</option><option value="az">A-Z</option><option value="amount_desc">Nominal terbesar</option></select><button id="refreshPayments">Filter</button></div>
-<div class="table"><table><thead><tr><th>Transaksi</th><th>Order</th><th>Metode</th><th>Status</th><th>Nominal</th><th>Tanggal</th></tr></thead><tbody id="payRows"></tbody></table></div></section>
+    button {
+      cursor: pointer;
+    }
+  </style>
+</head>
 
-<section id="shifts" class="tab" hidden><div class="shift"><button id="openShift">🔓 BUKA SHIFT</button><button id="closeShift" class="danger">🔒 TUTUP SHIFT</button></div><div id="currentShift" class="card">-</div>
-<div class="table"><table><thead><tr><th>Buka</th><th>Tutup</th><th>Order</th><th>Penjualan</th><th>Diskon</th><th>Aksi</th></tr></thead><tbody id="shiftRows"></tbody></table></div></section>
+<body>
 
-<section id="settings" class="tab" hidden><form id="settingsForm" class="card grid"><label>Nama toko<input id="sname"></label><label>Telepon CS<input id="sphone"></label><label class="wide">Alamat<textarea id="saddress"></textarea></label>
-<label>Minimum usia<input id="sage" type="number" min="0" value="21"></label><label>Mode<select id="smode"><option value="open">Buka</option><option value="closed">Tutup</option></select></label>
-<div class="wide"><button>Simpan pengaturan</button></div><p id="smsg" class="wide"></p></form></section>
-</div></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="admin.js"></script></body></html>
+<header>
+  <div>
+    <small>NUSANTARA DRINK</small>
+    <h1>Owner Dashboard</h1>
+  </div>
+
+  <button id="logout" type="button">Keluar</button>
+</header>
+
+<main>
+
+  <div id="access">
+    Memeriksa akses...
+  </div>
+
+  <div id="app" hidden>
+
+    <!-- NAVIGASI -->
+    <nav id="tabs">
+
+      <button type="button" data-tab="dashboard">
+        📊 Dashboard
+      </button>
+
+      <button type="button" data-tab="products">
+        📦 Produk
+      </button>
+
+      <button type="button" data-tab="orders">
+        📋 Pesanan
+      </button>
+
+      <button type="button" data-tab="stock">
+        📈 Stok
+      </button>
+
+      <button type="button" data-tab="customers">
+        👥 Customer
+      </button>
+
+      <button type="button" data-tab="payments">
+        💰 Pembayaran
+      </button>
+
+      <button type="button" data-tab="shifts">
+        🔄 Shift
+      </button>
+
+      <button type="button" data-tab="settings">
+        ⚙️ Pengaturan
+      </button>
+
+    </nav>
+
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="tab">
+
+      <div class="filters">
+
+        <select id="period">
+          <option value="day">Hari ini</option>
+          <option value="month">Bulan ini</option>
+          <option value="year">Tahun ini</option>
+        </select>
+
+        <button id="refreshDash" type="button">
+          Refresh
+        </button>
+
+      </div>
+
+      <div class="stats">
+
+        <article>
+          Omzet
+          <strong id="sales">Rp0</strong>
+        </article>
+
+        <article>
+          Pesanan
+          <strong id="orderCount">0</strong>
+        </article>
+
+        <article>
+          Produk aktif
+          <strong id="activeProducts">0</strong>
+        </article>
+
+        <article>
+          Stok
+          <strong id="stockCount">0</strong>
+        </article>
+
+      </div>
+
+    </section>
+
+
+    <!-- PRODUK -->
+    <section id="products" class="tab" hidden>
+
+      <div class="title">
+
+        <h2>Produk</h2>
+
+        <button id="addProduct" type="button">
+          + Tambah
+        </button>
+
+      </div>
+
+
+      <form id="productForm" hidden class="card grid">
+
+        <input type="hidden" id="pid">
+
+        <label>
+          Nama
+          <input id="pname" required>
+        </label>
+
+        <label>
+          SKU
+          <input id="psku">
+        </label>
+
+        <label>
+          Harga
+          <input id="pprice" type="number" min="0" required>
+        </label>
+
+        <label>
+          Harga modal
+          <input id="pcost" type="number" min="0" value="0">
+        </label>
+
+        <label>
+          Stok
+          <input id="pstock" type="number" min="0" value="0">
+        </label>
+
+        <label>
+          Min stok
+          <input id="pmin" type="number" min="0" value="0">
+        </label>
+
+        <label class="wide">
+          Deskripsi
+          <textarea id="pdesc"></textarea>
+        </label>
+
+        <label class="wide">
+          URL gambar
+          <input id="pimage">
+        </label>
+
+        <label>
+          Aktif
+
+          <select id="pactive">
+            <option value="true">Ya</option>
+            <option value="false">Tidak</option>
+          </select>
+
+        </label>
+
+        <div class="wide">
+
+          <button type="submit">
+            Simpan
+          </button>
+
+          <button type="button" id="cancelProduct">
+            Batal
+          </button>
+
+        </div>
+
+        <p id="pmsg" class="wide"></p>
+
+      </form>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>SKU</th>
+              <th>Harga</th>
+              <th>Stok</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+
+          <tbody id="productRows"></tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- PESANAN -->
+    <section id="orders" class="tab" hidden>
+
+      <div class="filters">
+
+        <input type="date" id="ofrom">
+
+        <input type="date" id="oto">
+
+        <select id="ostatus">
+
+          <option value="">
+            Semua status
+          </option>
+
+          <option>pending</option>
+          <option>confirmed</option>
+          <option>processing</option>
+          <option>shipped</option>
+          <option>delivered</option>
+          <option>cancelled</option>
+          <option>refunded</option>
+
+        </select>
+
+        <button id="refreshOrders" type="button">
+          Filter
+        </button>
+
+      </div>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>User</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Tanggal</th>
+            </tr>
+          </thead>
+
+          <tbody id="orderRows"></tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- STOK -->
+    <section id="stock" class="tab" hidden>
+
+      <div class="title">
+
+        <h2>Stok & Pergerakan</h2>
+
+        <button id="addMove" type="button">
+          + Pergerakan
+        </button>
+
+      </div>
+
+
+      <form id="moveForm" hidden class="card grid">
+
+        <label>
+          Produk
+          <select id="mproduct"></select>
+        </label>
+
+        <label>
+          Tipe
+
+          <select id="mtype">
+
+            <option value="in">
+              Masuk
+            </option>
+
+            <option value="out">
+              Keluar
+            </option>
+
+            <option value="adjustment">
+              Penyesuaian
+            </option>
+
+          </select>
+
+        </label>
+
+        <label>
+          Jumlah
+          <input id="mqty" type="number" min="1" required>
+        </label>
+
+        <label class="wide">
+          Catatan
+          <textarea id="mnote"></textarea>
+        </label>
+
+        <div class="wide">
+
+          <button type="submit">
+            Simpan
+          </button>
+
+          <button type="button" id="cancelMove">
+            Batal
+          </button>
+
+        </div>
+
+        <p id="mmsg" class="wide"></p>
+
+      </form>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>Tipe</th>
+              <th>Jumlah</th>
+              <th>Catatan</th>
+              <th>Tanggal</th>
+            </tr>
+          </thead>
+
+          <tbody id="moveRows"></tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- CUSTOMER -->
+    <section id="customers" class="tab" hidden>
+
+      <div class="filters">
+
+        <input
+          id="customerSearch"
+          placeholder="Cari nama / telepon / ID"
+        >
+
+        <button id="refreshCustomers" type="button">
+          Refresh
+        </button>
+
+      </div>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Nama</th>
+              <th>Telepon</th>
+              <th>Role</th>
+              <th>Aktif</th>
+              <th>Dibuat</th>
+            </tr>
+          </thead>
+
+          <tbody id="customerRows"></tbody>
+
+        </table>
+
+      </div>
+
+
+      <p class="note">
+        Penghapusan akun autentikasi tidak dilakukan langsung dari browser.
+        Gunakan fungsi backend ter-audit untuk tindakan tersebut.
+      </p>
+
+    </section>
+
+
+    <!-- PEMBAYARAN -->
+    <section id="payments" class="tab" hidden>
+
+      <div class="filters">
+
+        <select id="payPeriod">
+
+          <option value="today">
+            Transaksi hari ini
+          </option>
+
+          <option value="month">
+            Bulan ini
+          </option>
+
+          <option value="year">
+            Tahun ini
+          </option>
+
+          <option value="all">
+            Semua
+          </option>
+
+        </select>
+
+
+        <select id="paySort">
+
+          <option value="date_desc">
+            Tanggal terbaru
+          </option>
+
+          <option value="date_asc">
+            Tanggal terlama
+          </option>
+
+          <option value="az">
+            A-Z
+          </option>
+
+          <option value="amount_desc">
+            Nominal terbesar
+          </option>
+
+        </select>
+
+
+        <button id="refreshPayments" type="button">
+          Filter
+        </button>
+
+      </div>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Transaksi</th>
+              <th>Order</th>
+              <th>Metode</th>
+              <th>Status</th>
+              <th>Nominal</th>
+              <th>Tanggal</th>
+            </tr>
+          </thead>
+
+          <tbody id="payRows"></tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- SHIFT -->
+    <section id="shifts" class="tab" hidden>
+
+      <div class="shift">
+
+        <button id="openShift" type="button">
+          🔓 BUKA SHIFT
+        </button>
+
+        <button id="closeShift" type="button" class="danger">
+          🔒 TUTUP SHIFT
+        </button>
+
+      </div>
+
+
+      <div id="currentShift" class="card">
+        -
+      </div>
+
+
+      <div class="table">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Buka</th>
+              <th>Tutup</th>
+              <th>Order</th>
+              <th>Penjualan</th>
+              <th>Diskon</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+
+          <tbody id="shiftRows"></tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- PENGATURAN -->
+    <section id="settings" class="tab" hidden>
+
+      <form id="settingsForm" class="card grid">
+
+        <label>
+          Nama toko
+          <input id="sname">
+        </label>
+
+        <label>
+          Telepon CS
+          <input id="sphone">
+        </label>
+
+        <label class="wide">
+          Alamat
+          <textarea id="saddress"></textarea>
+        </label>
+
+        <label>
+          Minimum usia
+          <input id="sage" type="number" min="0" value="21">
+        </label>
+
+        <label>
+          Mode
+
+          <select id="smode">
+
+            <option value="open">
+              Buka
+            </option>
+
+            <option value="closed">
+              Tutup
+            </option>
+
+          </select>
+
+        </label>
+
+        <div class="wide">
+
+          <button type="submit">
+            Simpan pengaturan
+          </button>
+
+        </div>
+
+        <p id="smsg" class="wide"></p>
+
+      </form>
+
+    </section>
+
+  </div>
+
+</main>
+
+
+<!-- SUPABASE -->
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js">
+</script>
+
+
+<!-- DASHBOARD JS -->
+<script src="admin.js?v=3"></script>
+
+
+<!-- DETEKSI ERROR -->
+<script>
+  window.addEventListener("error", function (event) {
+
+    const box = document.getElementById("access");
+
+    if (!box) return;
+
+    box.classList.add("error");
+
+    box.innerHTML =
+      "<strong>Dashboard gagal dimuat.</strong><br><br>" +
+      "Error: " +
+      String(event.message || "JavaScript error") +
+      "<br><br>" +
+      "Refresh halaman setelah memastikan admin.js sudah ter-upload.";
+
+  });
+</script>
+
+</body>
+</html>
