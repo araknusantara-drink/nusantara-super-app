@@ -1579,6 +1579,7 @@ async function loadCheckout() {
   const addressSelect = document.querySelector("#checkoutAddress");
   const paymentSelect = document.querySelector("#checkoutPayment");
   const bankSelect = document.querySelector("#checkoutBank");
+  const ewalletSelect = document.querySelector("#checkoutEwallet");
   if (!addressSelect || !paymentSelect) return;
 
   addressSelect.innerHTML = customerAddresses.length
@@ -1631,7 +1632,18 @@ async function loadCheckout() {
     }
   }
 
+  if (ewalletSelect) {
+    ewalletSelect.innerHTML = `
+      <option value="">Pilih E-Wallet</option>
+      <option value="gopay">GoPay</option>
+      <option value="ovo">OVO</option>
+      <option value="dana">DANA</option>
+      <option value="shopeepay">ShopeePay</option>
+    `;
+  }
+
   updateBankTransferVisibility();
+  updateEwalletVisibility();
   await updateShippingPreview();
 }
 
@@ -1646,6 +1658,21 @@ function updateBankTransferVisibility() {
 
   box.style.display =
     paymentMethod === "bank_transfer"
+      ? "block"
+      : "none";
+}
+
+function updateEwalletVisibility() {
+  const paymentMethod =
+    document.querySelector("#checkoutPayment")?.value;
+
+  const box =
+    document.querySelector("#ewalletBox");
+
+  if (!box) return;
+
+  box.style.display =
+    paymentMethod === "ewallet"
       ? "block"
       : "none";
 }
@@ -1815,6 +1842,11 @@ async function handleCheckout() {
       ? document.querySelector("#checkoutBank")?.value
       : null;
 
+  const ewalletCode =
+    paymentMethod === "ewallet"
+      ? document.querySelector("#checkoutEwallet")?.value
+      : null;
+
   const message =
     document.querySelector("#checkoutMessage");
 
@@ -1833,6 +1865,17 @@ async function handleCheckout() {
     setMessage(
       message,
       "Pilih bank untuk Transfer Bank."
+    );
+    return;
+  }
+
+  if (
+    paymentMethod === "ewallet" &&
+    !ewalletCode
+  ) {
+    setMessage(
+      message,
+      "Pilih E-Wallet."
     );
     return;
   }
@@ -1870,7 +1913,8 @@ async function handleCheckout() {
             .querySelector("#checkoutNote")
             ?.value
             .trim() || null,
-        p_payment_bank_code: bankCode
+        p_payment_bank_code: bankCode,
+        p_payment_ewallet_code: ewalletCode
       }
     );
 
@@ -1900,9 +1944,19 @@ async function handleCheckout() {
         ).trim()
       : "";
 
+  const ewalletText =
+    paymentMethod === "ewallet"
+      ? " · E-Wallet: " +
+        (
+          document.querySelector("#checkoutEwallet")
+            ?.selectedOptions?.[0]?.textContent ||
+          ewalletCode
+        ).trim()
+      : "";
+
   setMessage(
     message,
-    `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}`
+    `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}${ewalletText}`
   );
 }
 
@@ -1999,6 +2053,7 @@ function setupCustomerForms() {
       "change",
       () => {
         updateBankTransferVisibility();
+        updateEwalletVisibility();
       }
     );
   }
