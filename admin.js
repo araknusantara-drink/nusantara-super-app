@@ -287,6 +287,21 @@ function setupButtons() {
   $("settingsForm").onsubmit =
     saveSettings;
 
+  $("getStoreLocation").onclick = () => {
+    if (!navigator.geolocation) {
+      alert("Browser tidak mendukung lokasi.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        $("storeLat").value = pos.coords.latitude.toFixed(7);
+        $("storeLng").value = pos.coords.longitude.toFixed(7);
+      },
+      err => alert("Lokasi toko gagal diambil: " + err.message),
+      { enableHighAccuracy:true, timeout:15000 }
+    );
+  };
+
 }
 
 
@@ -687,7 +702,46 @@ window.openOrderDetail = async function(id) {
   const itemRows=items.length?items.map(item=>`<tr><td>${esc(item.product_name||"-")}${item.sku?`<br><small>SKU: ${esc(item.sku)}</small>`:""}</td><td>${item.quantity}</td><td>${rupiah(item.unit_price)}</td><td>${rupiah(item.subtotal)}</td></tr>`).join(""):"<tr><td colspan=\"4\">Belum ada item.</td></tr>";
   const payRows=payments.length?payments.map(p=>`<tr><td>${esc(p.provider||"-")}</td><td>${esc(p.payment_method||"-")}</td><td>${esc(p.transaction_id||"-")}</td><td>${esc(p.status||"-")}</td><td>${rupiah(p.amount)}</td></tr>`).join(""):"<tr><td colspan=\"5\">Belum ada pembayaran.</td></tr>";
   body.innerHTML=`<div class="card"><h3>${esc(order.order_number||"-")}</h3><p><b>Customer:</b> ${esc(customer.full_name||"-")}</p><p><b>Email:</b> ${esc(customer.email||"-")}</p><p><b>Telepon:</b> ${esc(customer.phone||"-")}</p><p><b>Dibuat:</b> ${order.created_at?new Date(order.created_at).toLocaleString("id-ID"):"-"}</p><label><b>Status</b><select id="detailOrderStatus">${statusOptions}</select></label><button type="button" id="saveOrderStatus" style="margin-top:8px;">Simpan status</button></div><div class="table" style="margin-top:12px;"><table><thead><tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr></thead><tbody>${itemRows}</tbody></table></div><div class="card" style="margin-top:12px;"><p>Subtotal: <b>${rupiah(order.subtotal)}</b></p><p>Diskon: <b>${rupiah(order.discount_amount)}</b></p><p>Ongkir: <b>${rupiah(order.shipping_fee)}</b></p><p>Biaya pembayaran: <b>${rupiah(order.payment_fee)}</b></p><p>Total: <b>${rupiah(order.total_amount)}</b></p><p>Catatan: ${esc(order.customer_note||"-")}</p></div><div class="table" style="margin-top:12px;"><table><thead><tr><th>Provider</th><th>Metode</th><th>Transaksi</th><th>Status</th><th>Nominal</th></tr></thead><tbody>${payRows}</tbody></table></div>`;
-  $("saveOrderStatus").onclick=async()=>{const nextStatus=$("detailOrderStatus").value;if(!confirm(`Ubah status pesanan menjadi "${nextStatus}"?`))return;const rpc=await db.rpc("admin_update_order_status",{p_order_id:id,p_status:nextStatus});if(rpc.error){alert(rpc.error.message);return;}alert(rpc.data?.message||"Status berhasil diubah.");await loadOrders();await openOrderDetail(id);};
+  body.insertAdjacentHTML("beforeend", `
+    <div class="card" style="margin-top:12px;">
+      <h3>Koreksi Owner</h3>
+      <label>Diskon manual (Rp)
+        <input id="detailDiscount" type="number" min="0" step="1000" value="${Number(order.discount_amount||0)}">
+      </label>
+      <button type="button" id="saveOrderDiscount" style="margin-top:8px;">Simpan diskon</button>
+      <button type="button" id="deleteOrderButton" class="danger" style="margin-top:8px;">Hapus order</button>
+      <p class="note">Order yang sudah memiliki pembayaran <b>paid</b> tidak dapat dihapus.</p>
+    </div>
+  `);
+
+  $("saveOrderStatus").onclick=async()=>{
+    const nextStatus=$("detailOrderStatus").value;
+    if(!confirm(`Ubah status pesanan menjadi "${nextStatus}"?`))return;
+    const rpc=await db.rpc("admin_update_order_status",{p_order_id:id,p_status:nextStatus});
+    if(rpc.error){alert(rpc.error.message);return;}
+    alert(rpc.data?.message||"Status berhasil diubah.");
+    await loadOrders(); await openOrderDetail(id);
+  };
+
+  $("saveOrderDiscount").onclick=async()=>{
+    if(!["owner","admin"].includes(me?.role)){alert("Hanya Owner/Admin yang dapat mengubah diskon.");return;}
+    const discount=Number($("detailDiscount").value||0);
+    if(discount<0){alert("Diskon tidak valid.");return;}
+    const rpc=await db.rpc("admin_update_order_financials",{p_order_id:id,p_discount:discount});
+    if(rpc.error){alert(rpc.error.message);return;}
+    alert("Diskon berhasil diterapkan. Total order diperbarui.");
+    await loadOrders(); await openOrderDetail(id);
+  };
+
+  $("deleteOrderButton").onclick=async()=>{
+    if(!["owner","admin"].includes(me?.role)){alert("Hanya Owner/Admin yang dapat menghapus order.");return;}
+    if(!confirm("Hapus order ini? Hanya order Pending/Cancelled tanpa pembayaran Paid yang boleh dihapus."))return;
+    const rpc=await db.rpc("admin_delete_order",{p_order_id:id});
+    if(rpc.error){alert(rpc.error.message);return;}
+    alert(rpc.data?.message||"Order berhasil dihapus.");
+    $("orderDetail").hidden=true;
+    await loadOrders(); await loadDashboard(); await loadPayments();
+  };
 };
 
 
@@ -1621,6 +1675,16 @@ async function loadSettings() {
   $("smode").value =
     value.mode || "open";
 
+  const shippingResult = await db
+    .from("business_settings")
+    .select("setting_value")
+    .eq("setting_key","shipping")
+    .maybeSingle();
+
+  const shipping = shippingResult.data?.setting_value || {};
+  $("storeLat").value = shipping.store_lat ?? "";
+  $("storeLng").value = shipping.store_lng ?? "";
+
 }
 
 
@@ -1649,6 +1713,34 @@ async function saveSettings(event) {
       $("smode").value
 
   };
+
+  const shippingValue = {
+    store_lat: $("storeLat").value ? Number($("storeLat").value) : null,
+    store_lng: $("storeLng").value ? Number($("storeLng").value) : null,
+    tiers: [
+      { max_km: 3, fee: 5000 },
+      { max_km: 7, fee: 8000 },
+      { max_km: 12, fee: 12000 },
+      { max_km: 20, fee: 18000 }
+    ],
+    unavailable_above_km: 20
+  };
+
+  if ((shippingValue.store_lat === null) !== (shippingValue.store_lng === null)) {
+    $("smsg").textContent = "Latitude dan longitude toko harus diisi bersama.";
+    return;
+  }
+
+  const shippingSave = await db.from("business_settings").upsert({
+    setting_key:"shipping",
+    setting_value:shippingValue,
+    updated_by:user.id
+  },{onConflict:"setting_key"});
+
+  if (shippingSave.error) {
+    $("smsg").textContent = "Gagal menyimpan ongkir: " + shippingSave.error.message;
+    return;
+  }
 
 
   const result =
