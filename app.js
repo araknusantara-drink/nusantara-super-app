@@ -2025,8 +2025,14 @@ async function startMidtransPayment(orderId, paymentMethod, ewalletCode) {
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok || !result.token) {
+    const detail =
+      Array.isArray(result.detail?.error_messages)
+        ? result.detail.error_messages.join(" | ")
+        : (result.detail?.message || "");
     throw new Error(
-      result.error || "Gagal membuat pembayaran Midtrans."
+      detail
+        ? `${result.error || "Gagal membuat pembayaran Midtrans."} [${result.midtrans_status || response.status}]: ${detail}`
+        : (result.error || "Gagal membuat pembayaran Midtrans.")
     );
   }
 
