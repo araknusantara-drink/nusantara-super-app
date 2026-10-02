@@ -1191,6 +1191,11 @@ function editAddress(id) {
   ).value =
     address.notes || "";
 
+  document.querySelector("#addressLatitude").value =
+    address.latitude ?? "";
+  document.querySelector("#addressLongitude").value =
+    address.longitude ?? "";
+
   document.querySelector(
     "#addressDefault"
   ).checked =
@@ -1468,6 +1473,7 @@ async function deleteAddress(id) {
   }
 
   await loadAddresses();
+  await loadCheckout();
 }
 
 
