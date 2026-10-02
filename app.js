@@ -7,6 +7,12 @@ const SUPABASE_PUBLISHABLE_KEY =
 const LIVE_SITE_URL =
   "https://araknusantara-drink.github.io/nusantara-super-app/";
 
+const MIDTRANS_CLIENT_KEY =
+  "Mid-client-9-k6ruJBnWvcV4BW";
+
+const SUPABASE_FUNCTION_URL =
+  SUPABASE_URL + "/functions/v1";
+
 const supabaseClient =
   window.supabase.createClient(
     SUPABASE_URL,
@@ -1958,7 +1964,102 @@ async function handleCheckout() {
     message,
     `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}${ewalletText}`
   );
+
+  if (paymentMethod === "qris" || paymentMethod === "ewallet") {
+    try {
+      setMessage(message, "Menyiapkan pembayaran Midtrans...");
+      let paymentOrderId = data.order_id;
+      if (!paymentOrderId) {
+        const lookup = await supabaseClient
+          .from("orders")
+          .select("id")
+          .eq("order_number", data.order_number)
+          .maybeSingle();
+        paymentOrderId = lookup.data?.id;
+      }
+      if (!paymentOrderId) throw new Error("ID pesanan tidak ditemukan.");
+      await startMidtransPayment(paymentOrderId, paymentMethod, ewalletCode);
+    } catch (paymentError) {
+      console.error("Midtrans error:", paymentError);
+      setMessage(
+        message,
+        "Pesanan berhasil dibuat, tetapi pembayaran belum dapat dibuka: " +
+        paymentError.message
+      );
+    }
+  }
 }
+
+/* =========================
+   MIDTRANS PAYMENT
+========================= */
+
+async function startMidtransPayment(orderId, paymentMethod, ewalletCode) {
+  if (!window.snap) {
+    throw new Error("Midtrans Snap belum siap. Silakan refresh halaman.");
+  }
+
+  const session = await supabaseClient.auth.getSession();
+  const accessToken = session?.data?.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Sesi login sudah berakhir. Silakan login kembali.");
+  }
+
+  const response = await fetch(
+    SUPABASE_FUNCTION_URL + "/midtrans-create-token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + accessToken
+      },
+      body: JSON.stringify({
+        order_id: Number(orderId),
+        payment_method: paymentMethod,
+        ewallet_code: ewalletCode || null
+      })
+    }
+  );
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.token) {
+    throw new Error(
+      result.error || "Gagal membuat pembayaran Midtrans."
+    );
+  }
+
+  window.snap.pay(result.token, {
+    language: "id",
+    uiMode: "auto",
+    onSuccess: function () {
+      setMessage(
+        document.querySelector("#checkoutMessage"),
+        "Pembayaran berhasil diterima. Status akan diperbarui otomatis."
+      );
+    },
+    onPending: function () {
+      setMessage(
+        document.querySelector("#checkoutMessage"),
+        "Pembayaran sedang menunggu penyelesaian."
+      );
+    },
+    onError: function () {
+      setMessage(
+        document.querySelector("#checkoutMessage"),
+        "Pembayaran gagal. Silakan coba lagi."
+      );
+    },
+    onClose: function () {
+      setMessage(
+        document.querySelector("#checkoutMessage"),
+        "Halaman pembayaran ditutup. Pesanan tetap tersimpan dan dapat dibayar kembali."
+      );
+    }
+  });
+}
+
 
 /* =========================
    CUSTOMER FORMS
