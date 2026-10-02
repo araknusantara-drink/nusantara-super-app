@@ -450,6 +450,7 @@ async function showLoggedInView(user) {
   await loadCustomerProfile(user);
 
   await loadAddresses();
+  await loadCheckout();
 }
 
 
@@ -1288,6 +1289,16 @@ async function handleAddressSave(event) {
         .value
         .trim() || null,
 
+    latitude:
+      document.querySelector("#addressLatitude").value
+        ? Number(document.querySelector("#addressLatitude").value)
+        : null,
+
+    longitude:
+      document.querySelector("#addressLongitude").value
+        ? Number(document.querySelector("#addressLongitude").value)
+        : null,
+
     is_default:
       document.querySelector(
         "#addressDefault"
@@ -1404,6 +1415,7 @@ async function handleAddressSave(event) {
   resetAddressForm();
 
   await loadAddresses();
+  await loadCheckout();
 }
 
 
@@ -1516,6 +1528,119 @@ async function makeDefaultAddress(id) {
 
 
 /* =========================
+   CHECKOUT
+========================= */
+
+async function loadCheckout() {
+  const box = document.querySelector("#checkoutBox");
+  const hint = document.querySelector("#checkoutLoginHint");
+  if (!box || !hint) return;
+
+  if (!currentUser) {
+    box.style.display = "none";
+    hint.textContent = "Login diperlukan untuk checkout.";
+    return;
+  }
+
+  box.style.display = "block";
+  hint.textContent = "Pilih alamat dan metode pembayaran.";
+
+  const addressSelect = document.querySelector("#checkoutAddress");
+  const paymentSelect = document.querySelector("#checkoutPayment");
+  if (!addressSelect || !paymentSelect) return;
+
+  addressSelect.innerHTML = customerAddresses.length
+    ? customerAddresses.map(a => `<option value="${a.id}" ${a.is_default ? "selected" : ""}>${escapeHtml(a.label)} — ${escapeHtml(a.city)}</option>`).join("")
+    : "<option value=''>Belum ada alamat</option>";
+
+  const payments = await supabaseClient
+    .from("payment_methods")
+    .select("code,name")
+    .eq("is_active", true)
+    .order("sort_order");
+
+  if (payments.error) {
+    paymentSelect.innerHTML = "<option value=''>Gagal memuat metode pembayaran</option>";
+  } else {
+    paymentSelect.innerHTML = (payments.data || [])
+      .map(p => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}</option>`)
+      .join("");
+  }
+
+  await updateShippingPreview();
+}
+
+async function updateShippingPreview() {
+  const addressId = document.querySelector("#checkoutAddress")?.value;
+  const target = document.querySelector("#checkoutDistance");
+  if (!target) return;
+  if (!addressId) {
+    target.textContent = "Simpan alamat terlebih dahulu.";
+    return;
+  }
+
+  const {data,error} = await supabaseClient.rpc("customer_shipping_preview", {
+    p_address_id: Number(addressId)
+  });
+
+  if (error) {
+    target.textContent = error.message;
+    return;
+  }
+
+  target.textContent =
+    `Jarak: ${data.distance_km} km · Ongkir otomatis: ${rupiah(data.shipping_fee)}`;
+}
+
+async function handleCheckout() {
+  if (!currentUser) {
+    openAccountPanel();
+    showLoginView();
+    return;
+  }
+
+  if (!cart.length) {
+    alert("Keranjang masih kosong.");
+    return;
+  }
+
+  const addressId = Number(document.querySelector("#checkoutAddress")?.value);
+  const paymentMethod = document.querySelector("#checkoutPayment")?.value;
+  const message = document.querySelector("#checkoutMessage");
+
+  if (!addressId || !paymentMethod) {
+    setMessage(message, "Pilih alamat dan metode pembayaran.");
+    return;
+  }
+
+  setMessage(message, "Membuat pesanan...");
+
+  const {data,error} = await supabaseClient.rpc("create_customer_order", {
+    p_address_id: addressId,
+    p_items: cart.map(item => ({
+      product_id: Number(item.id),
+      quantity: Number(item.qty)
+    })),
+    p_payment_method: paymentMethod,
+    p_customer_note: document.querySelector("#checkoutNote")?.value.trim() || null
+  });
+
+  if (error) {
+    setMessage(message, "Gagal membuat pesanan: " + error.message);
+    return;
+  }
+
+  cart = [];
+  localStorage.setItem("nusantara_cart", "[]");
+  renderCart();
+
+  setMessage(
+    message,
+    `Pesanan ${data.order_number} berhasil dibuat · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}`
+  );
+}
+
+/* =========================
    CUSTOMER FORMS
 ========================= */
 
@@ -1559,6 +1684,32 @@ function setupCustomerForms() {
       resetAddressForm
     );
   }
+
+  const getAddressLocation = document.querySelector("#getAddressLocation");
+  if (getAddressLocation) {
+    getAddressLocation.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        alert("Browser tidak mendukung lokasi.");
+        return;
+      }
+      setMessage(document.querySelector("#addressMessage"), "Mengambil lokasi...");
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          document.querySelector("#addressLatitude").value = pos.coords.latitude;
+          document.querySelector("#addressLongitude").value = pos.coords.longitude;
+          setMessage(document.querySelector("#addressMessage"), "Lokasi tersimpan. Sekarang simpan alamat.");
+        },
+        err => setMessage(document.querySelector("#addressMessage"), "Lokasi gagal diambil: " + err.message),
+        {enableHighAccuracy:true, timeout:15000}
+      );
+    });
+  }
+
+  const checkoutButton = document.querySelector("#checkoutButton");
+  if (checkoutButton) checkoutButton.addEventListener("click", handleCheckout);
+
+  const checkoutAddress = document.querySelector("#checkoutAddress");
+  if (checkoutAddress) checkoutAddress.addEventListener("change", updateShippingPreview);
 }
 
 
