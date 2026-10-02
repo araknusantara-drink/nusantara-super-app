@@ -243,6 +243,8 @@ function setupButtons() {
   $("refreshOrders").onclick =
     loadOrders;
 
+  $("closeOrderDetail").onclick = () => { $("orderDetail").hidden = true; };
+
 
   $("addMove").onclick = () => {
 
@@ -666,114 +668,27 @@ async function loadDashboard() {
 ========================= */
 
 async function loadOrders() {
-
-  let query =
-    db
-      .from("orders")
-      .select("*")
-      .order(
-        "created_at",
-        { ascending: false }
-      )
-      .limit(300);
-
-
-  const from =
-    $("ofrom").value;
-
-  const to =
-    $("oto").value;
-
-  const status =
-    $("ostatus").value;
-
-
-  if (from) {
-
-    query =
-      query.gte(
-        "created_at",
-        new Date(
-          from + "T00:00:00"
-        ).toISOString()
-      );
-
-  }
-
-
-  if (to) {
-
-    query =
-      query.lt(
-        "created_at",
-        new Date(
-          new Date(
-            to + "T00:00:00"
-          ).getTime() +
-          86400000
-        ).toISOString()
-      );
-
-  }
-
-
-  if (status) {
-
-    query =
-      query.eq(
-        "status",
-        status
-      );
-
-  }
-
-
-  const result =
-    await query;
-
-
-  $("orderRows").innerHTML =
-    result.error
-      ? `
-        <tr>
-          <td colspan="7">
-            ${esc(result.error.message)}
-          </td>
-        </tr>
-      `
-      :
-      (result.data || [])
-        .map(order => `
-
-          <tr>
-
-            <td>
-              ${esc(order.order_number)}
-            </td>
-
-            <td>
-              ${esc(order.user_id)}
-            </td>
-
-            <td>
-              ${esc(order.status)}
-            </td>
-
-            <td>
-              ${rupiah(order.total_amount)}
-            </td>
-
-            <td>
-              ${new Date(
-                order.created_at
-              ).toLocaleString("id-ID")}
-            </td>
-
-          </tr>
-
-        `).join("");
-
+  let query = db.from("orders").select("*").order("created_at",{ascending:false}).limit(300);
+  const from = $("ofrom").value, to = $("oto").value, status = $("ostatus").value;
+  if (from) query=query.gte("created_at",new Date(from+"T00:00:00").toISOString());
+  if (to) query=query.lt("created_at",new Date(new Date(to+"T00:00:00").getTime()+86400000).toISOString());
+  if (status) query=query.eq("status",status);
+  const result=await query;
+  if(result.error){ $("orderRows").innerHTML=`<tr><td colspan="6">${esc(result.error.message)}</td></tr>`; return; }
+  $("orderRows").innerHTML=(result.data||[]).map(order=>`<tr><td><b>${esc(order.order_number)}</b></td><td>${esc(order.user_id)}</td><td>${esc(order.status)}</td><td>${rupiah(order.total_amount)}</td><td>${new Date(order.created_at).toLocaleString("id-ID")}</td><td><button type="button" onclick="openOrderDetail(${order.id})">Detail</button></td></tr>`).join("");
 }
+
+window.openOrderDetail = async function(id) {
+  const box=$("orderDetail"), body=$("orderDetailBody"); box.hidden=false; body.innerHTML="Memuat detail pesanan...";
+  const {data,error}=await db.rpc("admin_order_detail",{p_order_id:id});
+  if(error){body.innerHTML=`<p>${esc(error.message)}</p>`;return;}
+  const order=data?.order||{}, customer=data?.customer||{}, items=data?.items||[], payments=data?.payments||[];
+  const statusOptions=["pending","confirmed","processing","shipped","delivered","cancelled","refunded"].map(x=>`<option value="${x}" ${x===order.status?"selected":""}>${x}</option>`).join("");
+  const itemRows=items.length?items.map(item=>`<tr><td>${esc(item.product_name||"-")}${item.sku?`<br><small>SKU: ${esc(item.sku)}</small>`:""}</td><td>${item.quantity}</td><td>${rupiah(item.unit_price)}</td><td>${rupiah(item.subtotal)}</td></tr>`).join(""):"<tr><td colspan=\"4\">Belum ada item.</td></tr>";
+  const payRows=payments.length?payments.map(p=>`<tr><td>${esc(p.provider||"-")}</td><td>${esc(p.payment_method||"-")}</td><td>${esc(p.transaction_id||"-")}</td><td>${esc(p.status||"-")}</td><td>${rupiah(p.amount)}</td></tr>`).join(""):"<tr><td colspan=\"5\">Belum ada pembayaran.</td></tr>";
+  body.innerHTML=`<div class="card"><h3>${esc(order.order_number||"-")}</h3><p><b>Customer:</b> ${esc(customer.full_name||"-")}</p><p><b>Email:</b> ${esc(customer.email||"-")}</p><p><b>Telepon:</b> ${esc(customer.phone||"-")}</p><p><b>Dibuat:</b> ${order.created_at?new Date(order.created_at).toLocaleString("id-ID"):"-"}</p><label><b>Status</b><select id="detailOrderStatus">${statusOptions}</select></label><button type="button" id="saveOrderStatus" style="margin-top:8px;">Simpan status</button></div><div class="table" style="margin-top:12px;"><table><thead><tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr></thead><tbody>${itemRows}</tbody></table></div><div class="card" style="margin-top:12px;"><p>Subtotal: <b>${rupiah(order.subtotal)}</b></p><p>Diskon: <b>${rupiah(order.discount_amount)}</b></p><p>Ongkir: <b>${rupiah(order.shipping_fee)}</b></p><p>Biaya pembayaran: <b>${rupiah(order.payment_fee)}</b></p><p>Total: <b>${rupiah(order.total_amount)}</b></p><p>Catatan: ${esc(order.customer_note||"-")}</p></div><div class="table" style="margin-top:12px;"><table><thead><tr><th>Provider</th><th>Metode</th><th>Transaksi</th><th>Status</th><th>Nominal</th></tr></thead><tbody>${payRows}</tbody></table></div>`;
+  $("saveOrderStatus").onclick=async()=>{const nextStatus=$("detailOrderStatus").value;if(!confirm(`Ubah status pesanan menjadi "${nextStatus}"?`))return;const rpc=await db.rpc("admin_update_order_status",{p_order_id:id,p_status:nextStatus});if(rpc.error){alert(rpc.error.message);return;}alert(rpc.data?.message||"Status berhasil diubah.");await loadOrders();await openOrderDetail(id);};
+};
 
 
 /* =========================
