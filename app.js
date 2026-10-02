@@ -300,6 +300,19 @@ function addToCart(id) {
 }
 
 
+function removeFromCart(id) {
+  cart = cart.filter(
+    item => Number(item.id) !== Number(id)
+  );
+
+  localStorage.setItem(
+    "nusantara_cart",
+    JSON.stringify(cart)
+  );
+
+  renderCart();
+}
+
 function renderCart() {
 
   const element =
@@ -327,15 +340,27 @@ function renderCart() {
   element.innerHTML =
     cart.map(
       (item) => `
-        ${escapeHtml(item.name)}
-        × ${Number(item.qty)}
-        —
-        ${rupiah(
-          Number(item.price) *
-          Number(item.qty)
-        )}
+        <div style="margin:10px 0;">
+          <strong>${escapeHtml(item.name)}</strong>
+          <div>
+            × ${Number(item.qty)}
+            —
+            ${rupiah(
+              Number(item.price) *
+              Number(item.qty)
+            )}
+          </div>
+
+          <button
+            type="button"
+            class="text-btn"
+            onclick="removeFromCart(${Number(item.id)})"
+          >
+            🗑️ Hapus
+          </button>
+        </div>
       `
-    ).join("<br>") +
+    ).join("") +
     `
       <hr>
       <strong>
@@ -1549,14 +1574,19 @@ async function loadCheckout() {
   }
 
   box.style.display = "block";
-  hint.textContent = "Pilih alamat dan metode pembayaran.";
+  hint.textContent = "Pilih alamat, lokasi, dan metode pembayaran.";
 
   const addressSelect = document.querySelector("#checkoutAddress");
   const paymentSelect = document.querySelector("#checkoutPayment");
+  const bankSelect = document.querySelector("#checkoutBank");
   if (!addressSelect || !paymentSelect) return;
 
   addressSelect.innerHTML = customerAddresses.length
-    ? customerAddresses.map(a => `<option value="${a.id}" ${a.is_default ? "selected" : ""}>${escapeHtml(a.label)} — ${escapeHtml(a.city)}</option>`).join("")
+    ? customerAddresses.map(a =>
+        `<option value="${a.id}" ${a.is_default ? "selected" : ""}>
+          ${escapeHtml(a.label)} — ${escapeHtml(a.city)}
+        </option>`
+      ).join("")
     : "<option value=''>Belum ada alamat</option>";
 
   const payments = await supabaseClient
@@ -1566,36 +1596,198 @@ async function loadCheckout() {
     .order("sort_order");
 
   if (payments.error) {
-    paymentSelect.innerHTML = "<option value=''>Gagal memuat metode pembayaran</option>";
+    paymentSelect.innerHTML =
+      "<option value=''>Gagal memuat metode pembayaran</option>";
   } else {
     paymentSelect.innerHTML = (payments.data || [])
-      .map(p => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}</option>`)
+      .map(p =>
+        `<option value="${escapeHtml(p.code)}">
+          ${escapeHtml(p.name)}
+        </option>`
+      )
       .join("");
   }
 
+  if (bankSelect) {
+    const banks = await supabaseClient
+      .from("payment_banks")
+      .select("code,name")
+      .eq("is_active", true)
+      .order("sort_order");
+
+    if (banks.error) {
+      bankSelect.innerHTML =
+        "<option value=''>Gagal memuat daftar bank</option>";
+    } else {
+      bankSelect.innerHTML =
+        "<option value=''>Pilih bank</option>" +
+        (banks.data || [])
+          .map(b =>
+            `<option value="${escapeHtml(b.code)}">
+              ${escapeHtml(b.name)}
+            </option>`
+          )
+          .join("");
+    }
+  }
+
+  updateBankTransferVisibility();
   await updateShippingPreview();
 }
 
+function updateBankTransferVisibility() {
+  const paymentMethod =
+    document.querySelector("#checkoutPayment")?.value;
+
+  const box =
+    document.querySelector("#bankTransferBox");
+
+  if (!box) return;
+
+  box.style.display =
+    paymentMethod === "bank_transfer"
+      ? "block"
+      : "none";
+}
+
 async function updateShippingPreview() {
-  const addressId = document.querySelector("#checkoutAddress")?.value;
-  const target = document.querySelector("#checkoutDistance");
+  const addressId =
+    document.querySelector("#checkoutAddress")?.value;
+
+  const target =
+    document.querySelector("#checkoutDistance");
+
   if (!target) return;
+
   if (!addressId) {
-    target.textContent = "Simpan alamat terlebih dahulu.";
+    target.textContent =
+      "Simpan alamat terlebih dahulu.";
     return;
   }
 
-  const {data,error} = await supabaseClient.rpc("customer_shipping_preview", {
-    p_address_id: Number(addressId)
-  });
+  const address =
+    customerAddresses.find(
+      a => Number(a.id) === Number(addressId)
+    );
 
-  if (error) {
-    target.textContent = error.message;
+  if (!address?.latitude || !address?.longitude) {
+    target.textContent =
+      "Lokasi alamat belum tersedia. Tekan “📍 Ambil / perbarui lokasi alamat”.";
     return;
   }
 
   target.textContent =
-    `Jarak: ${data.distance_km} km · Ongkir otomatis: ${rupiah(data.shipping_fee)}`;
+    "Menghitung jarak dan ongkir...";
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      "customer_shipping_preview",
+      {
+        p_address_id: Number(addressId)
+      }
+    );
+
+  if (error) {
+    target.textContent =
+      "Jarak/ongkir belum dapat dihitung: " +
+      error.message;
+    return;
+  }
+
+  target.textContent =
+    `Jarak customer → toko: ${data.distance_km} km · Ongkir otomatis: ${rupiah(data.shipping_fee)}`;
+}
+
+async function captureCheckoutLocation() {
+  if (!currentUser) return;
+
+  const addressId =
+    Number(document.querySelector("#checkoutAddress")?.value);
+
+  const message =
+    document.querySelector("#checkoutLocationMessage");
+
+  if (!addressId) {
+    setMessage(
+      message,
+      "Pilih alamat terlebih dahulu."
+    );
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    setMessage(
+      message,
+      "Browser tidak mendukung lokasi perangkat."
+    );
+    return;
+  }
+
+  setMessage(
+    message,
+    "Meminta izin lokasi perangkat..."
+  );
+
+  navigator.geolocation.getCurrentPosition(
+    async position => {
+      const latitude =
+        position.coords.latitude;
+
+      const longitude =
+        position.coords.longitude;
+
+      const { error } =
+        await supabaseClient
+          .from("addresses")
+          .update({
+            latitude,
+            longitude
+          })
+          .eq("id", addressId)
+          .eq("user_id", currentUser.id);
+
+      if (error) {
+        console.error(
+          "Checkout location save error:",
+          error
+        );
+
+        setMessage(
+          message,
+          "Lokasi gagal disimpan: " +
+          error.message
+        );
+
+        return;
+      }
+
+      setMessage(
+        message,
+        "Lokasi alamat berhasil diperbarui."
+      );
+
+      await loadAddresses();
+      await loadCheckout();
+    },
+    error => {
+      console.error(
+        "Checkout geolocation error:",
+        error
+      );
+
+      setMessage(
+        message,
+        "Lokasi gagal diambil: " +
+        error.message +
+        ". Pastikan izin lokasi browser diizinkan."
+      );
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    }
+  );
 }
 
 async function handleCheckout() {
@@ -1610,39 +1802,107 @@ async function handleCheckout() {
     return;
   }
 
-  const addressId = Number(document.querySelector("#checkoutAddress")?.value);
-  const paymentMethod = document.querySelector("#checkoutPayment")?.value;
-  const message = document.querySelector("#checkoutMessage");
+  const addressId =
+    Number(
+      document.querySelector("#checkoutAddress")?.value
+    );
+
+  const paymentMethod =
+    document.querySelector("#checkoutPayment")?.value;
+
+  const bankCode =
+    paymentMethod === "bank_transfer"
+      ? document.querySelector("#checkoutBank")?.value
+      : null;
+
+  const message =
+    document.querySelector("#checkoutMessage");
 
   if (!addressId || !paymentMethod) {
-    setMessage(message, "Pilih alamat dan metode pembayaran.");
+    setMessage(
+      message,
+      "Pilih alamat dan metode pembayaran."
+    );
     return;
   }
 
-  setMessage(message, "Membuat pesanan...");
+  if (
+    paymentMethod === "bank_transfer" &&
+    !bankCode
+  ) {
+    setMessage(
+      message,
+      "Pilih bank untuk Transfer Bank."
+    );
+    return;
+  }
 
-  const {data,error} = await supabaseClient.rpc("create_customer_order", {
-    p_address_id: addressId,
-    p_items: cart.map(item => ({
-      product_id: Number(item.id),
-      quantity: Number(item.qty)
-    })),
-    p_payment_method: paymentMethod,
-    p_customer_note: document.querySelector("#checkoutNote")?.value.trim() || null
-  });
+  const address =
+    customerAddresses.find(
+      a => Number(a.id) === Number(addressId)
+    );
+
+  if (!address?.latitude || !address?.longitude) {
+    setMessage(
+      message,
+      "Lokasi alamat belum tersedia. Ambil/perbarui lokasi terlebih dahulu."
+    );
+    return;
+  }
+
+  setMessage(
+    message,
+    "Membuat pesanan..."
+  );
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      "create_customer_order",
+      {
+        p_address_id: addressId,
+        p_items: cart.map(item => ({
+          product_id: Number(item.id),
+          quantity: Number(item.qty)
+        })),
+        p_payment_method: paymentMethod,
+        p_customer_note:
+          document
+            .querySelector("#checkoutNote")
+            ?.value
+            .trim() || null,
+        p_payment_bank_code: bankCode
+      }
+    );
 
   if (error) {
-    setMessage(message, "Gagal membuat pesanan: " + error.message);
+    setMessage(
+      message,
+      "Gagal membuat pesanan: " +
+      error.message
+    );
     return;
   }
 
   cart = [];
-  localStorage.setItem("nusantara_cart", "[]");
+  localStorage.setItem(
+    "nusantara_cart",
+    "[]"
+  );
   renderCart();
+
+  const bankText =
+    paymentMethod === "bank_transfer"
+      ? " · Bank: " +
+        (
+          document.querySelector("#checkoutBank")
+            ?.selectedOptions?.[0]?.textContent ||
+          bankCode
+        ).trim()
+      : "";
 
   setMessage(
     message,
-    `Pesanan ${data.order_number} berhasil dibuat · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}`
+    `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}`
   );
 }
 
@@ -1711,11 +1971,47 @@ function setupCustomerForms() {
     });
   }
 
-  const checkoutButton = document.querySelector("#checkoutButton");
-  if (checkoutButton) checkoutButton.addEventListener("click", handleCheckout);
+  const checkoutButton =
+    document.querySelector("#checkoutButton");
 
-  const checkoutAddress = document.querySelector("#checkoutAddress");
-  if (checkoutAddress) checkoutAddress.addEventListener("change", updateShippingPreview);
+  if (checkoutButton) {
+    checkoutButton.addEventListener(
+      "click",
+      handleCheckout
+    );
+  }
+
+  const checkoutAddress =
+    document.querySelector("#checkoutAddress");
+
+  if (checkoutAddress) {
+    checkoutAddress.addEventListener(
+      "change",
+      updateShippingPreview
+    );
+  }
+
+  const checkoutPayment =
+    document.querySelector("#checkoutPayment");
+
+  if (checkoutPayment) {
+    checkoutPayment.addEventListener(
+      "change",
+      () => {
+        updateBankTransferVisibility();
+      }
+    );
+  }
+
+  const checkoutLocationButton =
+    document.querySelector("#checkoutLocationButton");
+
+  if (checkoutLocationButton) {
+    checkoutLocationButton.addEventListener(
+      "click",
+      captureCheckoutLocation
+    );
+  }
 }
 
 
