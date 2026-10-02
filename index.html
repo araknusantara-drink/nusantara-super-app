@@ -289,6 +289,13 @@
         placeholder="12345"
       >
 
+      <button type="button" class="text-btn" id="getAddressLocation">
+        📍 Gunakan lokasi perangkat untuk ongkir
+      </button>
+
+      <input id="addressLatitude" type="hidden">
+      <input id="addressLongitude" type="hidden">
+
       <label for="addressNotes">
         Catatan
       </label>
@@ -395,6 +402,31 @@
       Keranjang masih kosong.
     </div>
 
+  </section>
+
+  <section class="card" id="checkoutSection">
+    <h2>Checkout</h2>
+
+    <p id="checkoutLoginHint">Login diperlukan untuk checkout.</p>
+
+    <div id="checkoutBox" style="display:none;">
+      <label for="checkoutAddress">Alamat pengiriman</label>
+      <select id="checkoutAddress"></select>
+
+      <p id="checkoutDistance">Ongkir akan dihitung otomatis berdasarkan jarak.</p>
+
+      <label for="checkoutPayment">Metode pembayaran</label>
+      <select id="checkoutPayment"></select>
+
+      <label for="checkoutNote">Catatan pesanan</label>
+      <textarea id="checkoutNote" placeholder="Catatan untuk pesanan (opsional)"></textarea>
+
+      <button class="add" type="button" id="checkoutButton">
+        Buat pesanan
+      </button>
+
+      <p id="checkoutMessage"></p>
+    </div>
   </section>
 
 </main>
