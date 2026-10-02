@@ -413,10 +413,26 @@
       <label for="checkoutAddress">Alamat pengiriman</label>
       <select id="checkoutAddress"></select>
 
-      <p id="checkoutDistance">Ongkir akan dihitung otomatis berdasarkan jarak.</p>
+      <button class="text-btn" type="button" id="checkoutLocationButton">
+        📍 Ambil / perbarui lokasi alamat
+      </button>
+
+      <p id="checkoutLocationMessage">
+        Lokasi alamat diperlukan untuk menghitung jarak dan ongkir.
+      </p>
+
+      <p id="checkoutDistance">Jarak dan ongkir akan dihitung otomatis setelah lokasi tersedia.</p>
 
       <label for="checkoutPayment">Metode pembayaran</label>
       <select id="checkoutPayment"></select>
+
+      <div id="bankTransferBox" style="display:none; margin-top:10px;">
+        <label for="checkoutBank">Pilih bank Transfer Bank</label>
+        <select id="checkoutBank"></select>
+        <small>
+          Pilih bank yang akan digunakan pelanggan untuk transfer.
+        </small>
+      </div>
 
       <label for="checkoutNote">Catatan pesanan</label>
       <textarea id="checkoutNote" placeholder="Catatan untuk pesanan (opsional)"></textarea>
