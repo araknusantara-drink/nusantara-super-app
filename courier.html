@@ -172,7 +172,7 @@ $("orders").onchange=async()=>{
 $("refresh").onclick=orders;
 
 async function orders(){
-  const r=await db.from("orders").select("id,order_number,status").in("status",["processing","shipped"]).order("created_at",{ascending:false});
+  const r=await db.from("orders").select("id,order_number,status").in("status",["confirmed","processing","shipped"]).order("created_at",{ascending:false});
   if(r.error){$("orderInfo").textContent="Gagal memuat order: "+r.error.message;return}
   const list=r.data||[];
   $("orders").innerHTML=list.length?list.map(o=>'<option value="'+o.id+'">'+o.order_number+" — "+o.status+"</option>").join(""):"<option value=''>Tidak ada order aktif</option>";
