@@ -34,6 +34,7 @@ button{font-weight:700;cursor:pointer}
 <div id="map"></div>
 <button id="start">▶️ Mulai Tracking GPS</button>
 <button id="stop">⏹️ Hentikan Tracking</button>
+<button id="arrive">🏁 Tandai Pesanan Sampai</button>
 </div>
 
 <div class="card"><a href="./admin.html">← Dashboard</a></div>
@@ -139,7 +140,7 @@ async function send(pos){
     body:JSON.stringify({order_id:id,latitude:lat,longitude:lng,status:"on_delivery"})
   });
   const d=await r.json();
-  $("status").textContent=r.ok&&d.ok?"🟢 Tracking aktif":"❌ "+(d.error||"Gagal update");
+  $("status").textContent=r.ok&&d.ok?"🟢 Tracking aktif · Status: "+(d.order_status||currentOrder?.status||"") :"❌ "+(d.error||"Gagal update");
   await updateLiveRoute(lat,lng);
 }
 
@@ -152,6 +153,25 @@ $("start").onclick=()=>{
     enableHighAccuracy:true,maximumAge:5000,timeout:15000
   });
   $("status").textContent="🔎 Mencari GPS...";
+};
+
+$("arrive").onclick=async()=>{
+  if(!Number($("orders").value))return alert("Pilih order dulu.");
+  if(!lastPosition)return alert("Aktifkan GPS dan tunggu posisi kurir terbaca dulu.");
+  const s=await db.auth.getSession(),t=s.data?.session?.access_token,id=Number($("orders").value);
+  const lat=lastPosition.coords.latitude,lng=lastPosition.coords.longitude;
+  const r=await fetch(U+"/functions/v1/courier-location-update",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},
+    body:JSON.stringify({order_id:id,latitude:lat,longitude:lng,status:"arrived"})
+  });
+  const d=await r.json();
+  if(!r.ok||!d.ok)return alert(d.error||"Gagal menandai pesanan sampai.");
+  if(watch!==null)navigator.geolocation.clearWatch(watch);
+  watch=null;
+  $("status").textContent="🏁 Pesanan sampai · Status: "+(d.order_status||"delivered");
+  await loadOrderData();
+  await orders();
 };
 
 $("stop").onclick=()=>{
