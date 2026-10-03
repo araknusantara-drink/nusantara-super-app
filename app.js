@@ -2615,7 +2615,7 @@ function setupNavigation() {
       "click",
       () => {
 
-        await showHomePage();
+        showHomePage();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     );
