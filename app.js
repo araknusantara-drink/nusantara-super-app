@@ -24,6 +24,8 @@ let cart = JSON.parse(
 
 let currentUser = null;
 let customerAddresses = [];
+let orderMapInstances = {};
+let orderMapChannels = {};
 let editingAddressId = null;
 
 
@@ -2250,6 +2252,91 @@ function orderTimelineHtml(status) {
   `;
 }
 
+
+async function getCustomerMapData(orderId) {
+  const sessionResult = await supabaseClient.auth.getSession();
+  const accessToken = sessionResult?.data?.session?.access_token;
+  if (!accessToken) throw new Error("Sesi login sudah berakhir.");
+  const response = await fetch(SUPABASE_FUNCTION_URL + "/customer-map-data", {
+    method: "POST",
+    headers: {"Content-Type":"application/json","Authorization":"Bearer " + accessToken},
+    body: JSON.stringify({order_id:Number(orderId)})
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.error || "Data peta tidak tersedia.");
+  return result;
+}
+
+function destroyOrderMap(orderId) {
+  const id=Number(orderId);
+  if (orderMapChannels[id]) { supabaseClient.removeChannel(orderMapChannels[id]); delete orderMapChannels[id]; }
+  if (orderMapInstances[id]) { orderMapInstances[id].remove(); delete orderMapInstances[id]; }
+}
+
+async function drawOrderRoute(map, fromLat, fromLng, toLat, toLng, state) {
+  try {
+    const url="https://router.project-osrm.org/route/v1/driving/"+fromLng+","+fromLat+";"+toLng+","+toLat+"?overview=full&geometries=geojson";
+    const response=await fetch(url);
+    if (!response.ok) throw new Error("Routing service error");
+    const result=await response.json();
+    const route=result?.routes?.[0];
+    if (!route) throw new Error("Rute tidak ditemukan.");
+    if (state.layer) map.removeLayer(state.layer);
+    state.layer=L.geoJSON(route.geometry,{style:{weight:5,opacity:0.75}}).addTo(map);
+    state.etaText=Math.max(1,Math.round(Number(route.duration||0)/60))+" menit";
+  } catch(error) {
+    console.warn("Route OSRM gagal:",error);
+    state.etaText=null;
+  }
+  return state;
+}
+
+async function initOrderMap(orderId) {
+  const id=Number(orderId);
+  const container=document.querySelector("#orderMap_"+id);
+  const meta=document.querySelector("#orderMapMeta_"+id);
+  if (!container || !window.L) return;
+  destroyOrderMap(id);
+  container.innerHTML='<div style="padding:20px;text-align:center;">Memuat peta perjalanan...</div>';
+  try {
+    const data=await getCustomerMapData(id);
+    const store=data.store, destination=data.destination;
+    const tracking=data.tracking || {latitude:store.latitude,longitude:store.longitude,status:"at_store",updated_at:new Date().toISOString()};
+    container.innerHTML="";
+    const map=L.map(container,{zoomControl:false}).setView([Number(tracking.latitude),Number(tracking.longitude)],13);
+    L.control.zoom({position:"bottomright"}).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+    L.circleMarker([Number(store.latitude),Number(store.longitude)],{radius:8,weight:3,fillOpacity:1}).addTo(map).bindTooltip("🏪 Toko");
+    L.circleMarker([Number(destination.latitude),Number(destination.longitude)],{radius:8,weight:3,fillOpacity:1}).addTo(map).bindTooltip("🏠 Tujuan");
+    const courierMarker=L.circleMarker([Number(tracking.latitude),Number(tracking.longitude)],{radius:10,weight:3,fillOpacity:1}).addTo(map).bindTooltip("🚚 Kurir",{permanent:true});
+    const state={layer:null,etaText:null};
+    const updateMeta=(current)=>{
+      const statusText=current.status==="arrived"?"Kurir sudah tiba":current.status==="on_delivery"?"Kurir sedang menuju alamat":"Kurir berada di toko";
+      const updated=current.updated_at?new Date(current.updated_at).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}):"-";
+      if(meta) meta.innerHTML="<strong>"+escapeHtml(statusText)+"</strong>"+(state.etaText?" · ETA "+escapeHtml(state.etaText):"")+"<br><small>Update terakhir "+escapeHtml(updated)+"</small>";
+    };
+    const updateCourier=async(current)=>{
+      const lat=Number(current.latitude),lng=Number(current.longitude);
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+      courierMarker.setLatLng([lat,lng]);
+      await drawOrderRoute(map,lat,lng,Number(destination.latitude),Number(destination.longitude),state);
+      updateMeta(current);
+      map.fitBounds(L.latLngBounds([[lat,lng],[Number(destination.latitude),Number(destination.longitude)]]),{padding:[35,35],maxZoom:15});
+    };
+    await updateCourier(tracking);
+    const channel=supabaseClient.channel("order-tracking-"+id).on("postgres_changes",{event:"UPDATE",schema:"public",table:"order_tracking",filter:"order_id=eq."+id},async(payload)=>{await updateCourier(payload.new);}).subscribe();
+    orderMapInstances[id]=map; orderMapChannels[id]=channel;
+  } catch(error) {
+    console.error("Order map error:",error);
+    container.innerHTML='<div style="padding:20px;text-align:center;">'+escapeHtml(error.message||"Peta belum dapat dimuat.")+"</div>";
+    if(meta) meta.textContent="Lokasi perjalanan belum tersedia.";
+  }
+}
+
+async function initAllOrderMaps(orders) {
+  for (const order of orders) await initOrderMap(order.id);
+}
+
 async function loadCustomerOrders() {
   const container = document.querySelector("#customerOrders");
   if (!container || !currentUser) return;
@@ -2339,17 +2426,13 @@ async function loadCustomerOrders() {
       paymentStatus === "failed" ? "Pembayaran gagal" :
       "Belum dibayar";
 
-    const mapBox = `
-      <div class="card" style="margin-top:12px;">
+    const mapBox = `      <div class="card" style="margin-top:12px;">
         <strong>📍 Perjalanan pesanan</strong>
-        <div id="orderMap_${Number(order.id)}" style="margin-top:8px;min-height:120px;border-radius:12px;overflow:hidden;background:#f2f2f2;">
-          <div style="padding:20px;text-align:center;">
-            Peta perjalanan realtime akan aktif setelah lokasi perjalanan kurir tersedia.
-          </div>
+        <div id="orderMap_${Number(order.id)}" style="margin-top:8px;height:280px;border-radius:12px;overflow:hidden;background:#f2f2f2;">
+          <div style="padding:20px;text-align:center;">Memuat peta perjalanan...</div>
         </div>
-        <small style="display:block;margin-top:8px;">
-          Status perjalanan diperbarui dari sistem pesanan.
-        </small>
+        <div id="orderMapMeta_${Number(order.id)}" style="margin-top:8px;">Menghubungkan tracking kurir...</div>
+        <small style="display:block;margin-top:8px;">🚚 Posisi kurir diperbarui realtime saat sistem menerima lokasi baru.</small>
       </div>
     `;
 
@@ -2404,6 +2487,8 @@ async function loadCustomerOrders() {
       </article>
     `;
   }).join("");
+
+  await initAllOrderMaps(orders);
 }
 
 async function callCustomerOrderAction(orderId, action) {
