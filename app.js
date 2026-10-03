@@ -479,6 +479,7 @@ async function showLoggedInView(user) {
 
   await loadAddresses();
   await loadCheckout();
+  await loadCustomerOrders();
 }
 
 
@@ -2172,6 +2173,191 @@ async function checkSession() {
 
 
 /* =========================
+   CUSTOMER ORDERS
+========================= */
+
+async function loadCustomerOrders() {
+  const container = document.querySelector("#customerOrders");
+  if (!container || !currentUser) return;
+
+  container.innerHTML = `
+    <div class="card">
+      <strong>Memuat pesanan...</strong>
+    </div>
+  `;
+
+  const { data, error } = await supabaseClient
+    .from("orders")
+    .select(`
+      id,
+      order_number,
+      status,
+      subtotal,
+      discount_amount,
+      shipping_fee,
+      payment_fee,
+      total_amount,
+      created_at,
+      payments (
+        id,
+        provider,
+        payment_method,
+        payment_bank_code,
+        payment_ewallet_code,
+        status,
+        transaction_id
+      ),
+      order_items (
+        id,
+        quantity,
+        unit_price,
+        subtotal,
+        products (
+          name,
+          image_url
+        )
+      )
+    `)
+    .eq("user_id", currentUser.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Customer orders load error:", error);
+    container.innerHTML = `
+      <div class="card">
+        <strong>Pesanan belum bisa dimuat.</strong>
+        <div style="margin-top:8px;">${escapeHtml(error.message)}</div>
+      </div>
+    `;
+    return;
+  }
+
+  const orders = data || [];
+
+  if (!orders.length) {
+    container.innerHTML = `
+      <div class="card">
+        Belum ada pesanan.
+      </div>
+    `;
+    return;
+  }
+
+  const statusText = {
+    pending: "Menunggu pembayaran",
+    confirmed: "Dikonfirmasi",
+    processing: "Diproses",
+    shipped: "Dikirim",
+    delivered: "Selesai",
+    cancelled: "Dibatalkan",
+    refunded: "Dikembalikan"
+  };
+
+  container.innerHTML = orders.map(order => {
+    const payment = Array.isArray(order.payments)
+      ? order.payments[0]
+      : order.payments;
+
+    const items = Array.isArray(order.order_items)
+      ? order.order_items
+      : [];
+
+    const itemText = items.length
+      ? items.map(item =>
+          `${escapeHtml(item.products?.name || "Produk")} × ${Number(item.quantity)}`
+        ).join(", ")
+      : "Detail produk tidak tersedia";
+
+    const paymentStatus = payment?.status || "pending";
+    const canPay =
+      order.status !== "cancelled" &&
+      order.status !== "refunded" &&
+      paymentStatus !== "paid" &&
+      order.status !== "delivered";
+
+    const paymentLabel =
+      paymentStatus === "paid" ? "Sudah dibayar" :
+      paymentStatus === "expired" ? "Pembayaran kedaluwarsa" :
+      paymentStatus === "failed" ? "Pembayaran gagal" :
+      "Belum dibayar";
+
+    return `
+      <article class="card" style="margin:10px 0;">
+        <strong>${escapeHtml(order.order_number)}</strong>
+
+        <div style="margin-top:6px;">
+          Status pesanan:
+          <strong>${escapeHtml(statusText[order.status] || order.status)}</strong>
+        </div>
+
+        <div style="margin-top:6px;">
+          Pembayaran:
+          <strong>${escapeHtml(paymentLabel)}</strong>
+        </div>
+
+        <div style="margin-top:6px;">
+          ${itemText}
+        </div>
+
+        <div style="margin-top:6px;">
+          Total:
+          <strong>${rupiah(order.total_amount)}</strong>
+        </div>
+
+        <small style="display:block;margin-top:6px;">
+          ${new Date(order.created_at).toLocaleString("id-ID")}
+        </small>
+
+        ${canPay ? `
+          <button
+            type="button"
+            class="add"
+            style="margin-top:10px;"
+            onclick="payCustomerOrder(${Number(order.id)})"
+          >
+            Bayar
+          </button>
+        ` : ""}
+
+        ${paymentStatus === "paid" ? `
+          <div style="margin-top:10px;">
+            Pembayaran berhasil.
+          </div>
+        ` : ""}
+
+        ${order.status === "cancelled" ? `
+          <div style="margin-top:10px;">
+            Pesanan dibatalkan.
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }).join("");
+}
+
+async function payCustomerOrder(orderId) {
+  if (!currentUser) {
+    openAccountPanel();
+    showLoginView();
+    return;
+  }
+
+  const message = document.querySelector("#ordersMessage");
+
+  try {
+    setMessage(message, "Menyiapkan pembayaran Xendit...");
+    await startXenditPayment(orderId);
+  } catch (error) {
+    console.error("Customer order payment error:", error);
+    setMessage(
+      message,
+      "Pembayaran belum dapat dibuka: " + error.message
+    );
+    await loadCustomerOrders();
+  }
+}
+
+/* =========================
    NAVIGATION
 ========================= */
 
@@ -2289,9 +2475,18 @@ function setupNavigation() {
           return;
         }
 
-        alert(
-          "Halaman pesanan akan kita bangun berikutnya."
-        );
+        openAccountPanel();
+        const loggedInView = document.querySelector("#loggedInView");
+        if (loggedInView) {
+          loggedInView.style.display = "block";
+        }
+        await loadCustomerOrders();
+
+        document.querySelector("#customerOrdersSection")
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
       }
     );
   }
