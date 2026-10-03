@@ -1,9 +1,198 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nusantara Drink — Mode Kurir</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>body{font-family:system-ui;margin:0;background:#f5f5f5}main{max-width:700px;margin:auto;padding:16px}.card{background:white;border-radius:16px;padding:16px;margin-bottom:14px}select,button{width:100%;padding:13px;margin-top:8px;border-radius:10px;border:1px solid #ccc}#map{height:360px;border-radius:14px;margin-top:12px}</style></head><body><main><div class="card"><h2>🚚 Mode Kurir</h2><div id="access">Memeriksa akses...</div></div><div id="app" hidden><div class="card"><select id="orders"></select><button id="refresh">🔄 Refresh</button></div><div class="card"><b id="status">Tracking belum aktif</b><div id="coords">GPS belum aktif</div><div id="map"></div><button id="start">▶️ Mulai Tracking GPS</button><button id="stop">⏹️ Hentikan</button></div><div class="card"><a href="./admin.html">← Dashboard</a></div></div></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
-const U="https://xevkttwbzfosxmslnrku.supabase.co",K="sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0N",db=supabase.createClient(U,K);let watch=null,map,marker;
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nusantara Drink — Mode Kurir</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body{font-family:system-ui;margin:0;background:#f5f5f5;color:#111}
+main{max-width:760px;margin:auto;padding:16px}
+.card{background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+select,button{width:100%;padding:13px;margin-top:8px;border-radius:10px;border:1px solid #ccc;background:#fff}
+button{font-weight:700;cursor:pointer}
+#map{height:390px;border-radius:14px;margin-top:12px}
+.meta{margin-top:10px;line-height:1.5}
+.small{font-size:13px;color:#666}
+</style>
+</head>
+<body>
+<main>
+<div class="card"><h2>🚚 Mode Kurir</h2><div id="access">Memeriksa akses...</div></div>
+
+<div id="app" hidden>
+<div class="card">
+<select id="orders"></select>
+<button id="refresh">🔄 Refresh Order</button>
+<div id="orderInfo" class="meta small">Pilih order untuk melihat rute.</div>
+</div>
+
+<div class="card">
+<b id="status">Tracking belum aktif</b>
+<div id="coords" class="small">GPS belum aktif</div>
+<div id="routeInfo" class="meta">Rute belum dimuat.</div>
+<div id="map"></div>
+<button id="start">▶️ Mulai Tracking GPS</button>
+<button id="stop">⏹️ Hentikan Tracking</button>
+</div>
+
+<div class="card"><a href="./admin.html">← Dashboard</a></div>
+</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const U="https://xevkttwbzfosxmslnrku.supabase.co";
+const K="sb_publishable_nqqizWWCx2Wztrdc1ya4XQ_BHaRWM0N";
+const db=supabase.createClient(U,K);
+let watch=null,map=null,courierMarker=null,storeMarker=null,destinationMarker=null,routeLine=null;
+let currentOrder=null,store=null,destination=null,lastSentAt=0,lastPosition=null;
+
 const $=x=>document.getElementById(x);
-async function init(){const s=await db.auth.getSession(),u=s.data?.session?.user;if(!u){$("access").textContent="Login diperlukan.";return}const p=await db.from("profiles").select("role,is_active").eq("id",u.id).maybeSingle();if(p.error||!p.data?.is_active||!["owner","admin","staff"].includes(p.data.role)){$("access").textContent="Akses kurir ditolak.";return}$("access").textContent="Akses kurir aktif.";$("app").hidden=false;map=L.map("map").setView([-6.2,106.8],12);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);await orders()}
-async function orders(){const r=await db.from("orders").select("id,order_number,status").in("status",["processing","shipped"]).order("created_at",{ascending:false});$("orders").innerHTML=(r.data||[]).map(o=>'<option value="'+o.id+'">'+o.order_number+" — "+o.status+"</option>").join("")}
-async function send(pos){const s=await db.auth.getSession(),t=s.data?.session?.access_token,id=Number($("orders").value),lat=pos.coords.latitude,lng=pos.coords.longitude;$("coords").textContent="GPS: "+lat.toFixed(6)+", "+lng.toFixed(6);if(!marker)marker=L.circleMarker([lat,lng],{radius:10}).addTo(map);else marker.setLatLng([lat,lng]);map.setView([lat,lng],15);const r=await fetch(U+"/functions/v1/courier-location-update",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({order_id:id,latitude:lat,longitude:lng,status:"on_delivery"})}),d=await r.json();$("status").textContent=r.ok&&d.ok?"🟢 Tracking aktif":"❌ "+(d.error||"Gagal update")}
-$("start").onclick=()=>{if(!navigator.geolocation)return alert("GPS tidak tersedia.");if(watch!==null)return;watch=navigator.geolocation.watchPosition(send,e=>$("status").textContent="GPS: "+e.message,{enableHighAccuracy:true,maximumAge:5000,timeout:15000});$("status").textContent="Mencari GPS..."};
-$("stop").onclick=()=>{if(watch!==null)navigator.geolocation.clearWatch(watch);watch=null;$("status").textContent="Tracking dihentikan."};$("refresh").onclick=orders;init();
-</script></body></html>
+
+function clearRoute(){
+  if(routeLine){map.removeLayer(routeLine);routeLine=null}
+}
+
+async function loadOrderData(){
+  const id=Number($("orders").value);
+  if(!id){currentOrder=null;return}
+  const o=await db.from("orders").select("id,order_number,status,address_id,addresses(recipient_name,address_line,city,province,latitude,longitude)").eq("id",id).maybeSingle();
+  if(o.error||!o.data){$("orderInfo").textContent="Gagal memuat order.";return}
+  currentOrder=o.data;
+  const a=o.data.addresses;
+  destination=(a&&a.latitude!=null&&a.longitude!=null)?{lat:Number(a.latitude),lng:Number(a.longitude)}:null;
+
+  const s=await db.from("business_settings").select("setting_value").eq("setting_key","shipping").maybeSingle();
+  const v=s.data?.setting_value||{};
+  store=(v.store_lat!=null&&v.store_lng!=null)?{lat:Number(v.store_lat),lng:Number(v.store_lng)}:null;
+
+  $("orderInfo").innerHTML="<b>"+o.data.order_number+"</b> · "+o.data.status+
+    (a?"<br>📍 "+(a.recipient_name||"Customer")+" — "+(a.address_line||"")+", "+(a.city||""):"");
+  renderMap();
+}
+
+function renderMap(){
+  if(!map)return;
+  clearRoute();
+  if(storeMarker){map.removeLayer(storeMarker);storeMarker=null}
+  if(destinationMarker){map.removeLayer(destinationMarker);destinationMarker=null}
+  if(courierMarker){map.removeLayer(courierMarker);courierMarker=null}
+
+  const points=[];
+  if(store){
+    storeMarker=L.circleMarker([store.lat,store.lng],{radius:9}).addTo(map).bindTooltip("🏪 Toko",{permanent:true,direction:"top"});
+    points.push([store.lat,store.lng]);
+  }
+  if(destination){
+    destinationMarker=L.circleMarker([destination.lat,destination.lng],{radius:9}).addTo(map).bindTooltip("📍 Customer",{permanent:true,direction:"top"});
+    points.push([destination.lat,destination.lng]);
+  }
+  if(points.length)map.fitBounds(points,{padding:[30,30]});
+  if(!destination){$("routeInfo").textContent="⚠️ Alamat customer belum punya koordinat.";return}
+  if(!store){$("routeInfo").textContent="⚠️ Lokasi toko belum tersedia.";return}
+  $("routeInfo").textContent="Menghitung rute toko → customer...";
+  drawRoute(store.lat,store.lng,destination.lat,destination.lng);
+}
+
+async function drawRoute(fromLat,fromLng,toLat,toLng){
+  const url="https://router.project-osrm.org/route/v1/driving/"+fromLng+","+fromLat+";"+toLng+","+toLat+"?overview=full&geometries=geojson";
+  try{
+    const r=await fetch(url);const d=await r.json();const rt=d.routes?.[0];
+    if(!rt)throw new Error("Rute tidak ditemukan");
+    clearRoute();
+    routeLine=L.geoJSON(rt.geometry).addTo(map);
+    const km=(rt.distance/1000).toFixed(1);
+    const min=Math.max(1,Math.round(rt.duration/60));
+    $("routeInfo").textContent="🛣️ "+km+" km · ⏱️ ETA sekitar "+min+" menit";
+    map.fitBounds(routeLine.getBounds(),{padding:[30,30]});
+  }catch(e){$("routeInfo").textContent="Rute gagal dimuat."}
+}
+
+function updateCourierMarker(lat,lng){
+  if(!courierMarker){
+    courierMarker=L.circleMarker([lat,lng],{radius:11}).addTo(map).bindTooltip("🚚 Kurir",{permanent:true,direction:"top"});
+  }else courierMarker.setLatLng([lat,lng]);
+}
+
+async function updateLiveRoute(lat,lng){
+  if(!destination)return;
+  await drawRoute(lat,lng,destination.lat,destination.lng);
+}
+
+async function send(pos){
+  const now=Date.now();
+  lastPosition=pos;
+  const lat=pos.coords.latitude,lng=pos.coords.longitude;
+  updateCourierMarker(lat,lng);
+  $("coords").textContent="GPS: "+lat.toFixed(6)+", "+lng.toFixed(6);
+
+  // Batasi pengiriman ke server agar tidak spam setiap perubahan GPS.
+  if(now-lastSentAt<5000)return;
+  lastSentAt=now;
+
+  const s=await db.auth.getSession(),t=s.data?.session?.access_token,id=Number($("orders").value);
+  if(!id||!t)return;
+  const r=await fetch(U+"/functions/v1/courier-location-update",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},
+    body:JSON.stringify({order_id:id,latitude:lat,longitude:lng,status:"on_delivery"})
+  });
+  const d=await r.json();
+  $("status").textContent=r.ok&&d.ok?"🟢 Tracking aktif":"❌ "+(d.error||"Gagal update");
+  await updateLiveRoute(lat,lng);
+}
+
+$("start").onclick=()=>{
+  if(!navigator.geolocation)return alert("GPS tidak tersedia.");
+  if(!Number($("orders").value))return alert("Pilih order dulu.");
+  if(watch!==null)return;
+  lastSentAt=0;
+  watch=navigator.geolocation.watchPosition(send,e=>$("status").textContent="❌ GPS: "+e.message,{
+    enableHighAccuracy:true,maximumAge:5000,timeout:15000
+  });
+  $("status").textContent="🔎 Mencari GPS...";
+};
+
+$("stop").onclick=()=>{
+  if(watch!==null)navigator.geolocation.clearWatch(watch);
+  watch=null;
+  $("status").textContent="Tracking dihentikan.";
+};
+
+$("orders").onchange=async()=>{
+  if(watch!==null){
+    navigator.geolocation.clearWatch(watch);watch=null;
+    $("status").textContent="Order diganti — tracking dihentikan.";
+  }
+  await loadOrderData();
+};
+
+$("refresh").onclick=orders;
+
+async function orders(){
+  const r=await db.from("orders").select("id,order_number,status").in("status",["processing","shipped"]).order("created_at",{ascending:false});
+  if(r.error){$("orderInfo").textContent="Gagal memuat order: "+r.error.message;return}
+  const list=r.data||[];
+  $("orders").innerHTML=list.length?list.map(o=>'<option value="'+o.id+'">'+o.order_number+" — "+o.status+"</option>").join(""):"<option value=''>Tidak ada order aktif</option>";
+  await loadOrderData();
+}
+
+async function init(){
+  const s=await db.auth.getSession(),u=s.data?.session?.user;
+  if(!u){$("access").textContent="Login diperlukan.";return}
+  const p=await db.from("profiles").select("role,is_active").eq("id",u.id).maybeSingle();
+  if(p.error||!p.data?.is_active||!["owner","admin","staff"].includes(p.data.role)){
+    $("access").textContent="Akses kurir ditolak.";return
+  }
+  $("access").textContent="Akses kurir aktif.";
+  $("app").hidden=false;
+  map=L.map("map").setView([-6.2,106.8],12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+  await orders();
+}
+init();
+</script>
+</body>
+</html>
