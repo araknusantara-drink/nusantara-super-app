@@ -7,9 +7,6 @@ const SUPABASE_PUBLISHABLE_KEY =
 const LIVE_SITE_URL =
   "https://araknusantara-drink.github.io/nusantara-super-app/";
 
-const MIDTRANS_CLIENT_KEY =
-  "Mid-client-9-k6ruJBnWvcV4BW";
-
 const SUPABASE_FUNCTION_URL =
   SUPABASE_URL + "/functions/v1";
 
@@ -1965,22 +1962,28 @@ async function handleCheckout() {
     `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}${ewalletText}`
   );
 
-  if (paymentMethod === "qris" || paymentMethod === "ewallet") {
+  if (paymentMethod !== "cash") {
     try {
-      setMessage(message, "Menyiapkan pembayaran Midtrans...");
+      setMessage(message, "Menyiapkan pembayaran Xendit...");
       let paymentOrderId = data.order_id;
+
       if (!paymentOrderId) {
         const lookup = await supabaseClient
           .from("orders")
           .select("id")
           .eq("order_number", data.order_number)
           .maybeSingle();
+
         paymentOrderId = lookup.data?.id;
       }
-      if (!paymentOrderId) throw new Error("ID pesanan tidak ditemukan.");
-      await startMidtransPayment(paymentOrderId, paymentMethod, ewalletCode);
+
+      if (!paymentOrderId) {
+        throw new Error("ID pesanan tidak ditemukan.");
+      }
+
+      await startXenditPayment(paymentOrderId);
     } catch (paymentError) {
-      console.error("Midtrans error:", paymentError);
+      console.error("Xendit error:", paymentError);
       setMessage(
         message,
         "Pesanan berhasil dibuat, tetapi pembayaran belum dapat dibuka: " +
@@ -1991,14 +1994,10 @@ async function handleCheckout() {
 }
 
 /* =========================
-   MIDTRANS PAYMENT
+   XENDIT PAYMENT
 ========================= */
 
-async function startMidtransPayment(orderId, paymentMethod, ewalletCode) {
-  if (!window.snap) {
-    throw new Error("Midtrans Snap belum siap. Silakan refresh halaman.");
-  }
-
+async function startXenditPayment(orderId) {
   const session = await supabaseClient.auth.getSession();
   const accessToken = session?.data?.session?.access_token;
 
@@ -2007,7 +2006,7 @@ async function startMidtransPayment(orderId, paymentMethod, ewalletCode) {
   }
 
   const response = await fetch(
-    SUPABASE_FUNCTION_URL + "/midtrans-create-token",
+    SUPABASE_FUNCTION_URL + "/xendit-create-session",
     {
       method: "POST",
       headers: {
@@ -2015,56 +2014,29 @@ async function startMidtransPayment(orderId, paymentMethod, ewalletCode) {
         "Authorization": "Bearer " + accessToken
       },
       body: JSON.stringify({
-        order_id: Number(orderId),
-        payment_method: paymentMethod,
-        ewallet_code: ewalletCode || null
+        order_id: Number(orderId)
       })
     }
   );
 
   const result = await response.json().catch(() => ({}));
 
-  if (!response.ok || !result.token) {
+  if (!response.ok || !result.payment_link_url) {
     const detail =
-      Array.isArray(result.detail?.error_messages)
-        ? result.detail.error_messages.join(" | ")
-        : (result.detail?.message || "");
+      result.detail?.message ||
+      result.detail?.error_code ||
+      (typeof result.detail === "string" ? result.detail : "");
+
     throw new Error(
       detail
-        ? `${result.error || "Gagal membuat pembayaran Midtrans."} [${result.midtrans_status || response.status}]: ${detail}`
-        : (result.error || "Gagal membuat pembayaran Midtrans.")
+        ? `${result.error || "Gagal membuat pembayaran Xendit."} [${result.xendit_status || response.status}]: ${detail}`
+        : (result.error || "Gagal membuat pembayaran Xendit.")
     );
   }
 
-  window.snap.pay(result.token, {
-    language: "id",
-    uiMode: "auto",
-    onSuccess: function () {
-      setMessage(
-        document.querySelector("#checkoutMessage"),
-        "Pembayaran berhasil diterima. Status akan diperbarui otomatis."
-      );
-    },
-    onPending: function () {
-      setMessage(
-        document.querySelector("#checkoutMessage"),
-        "Pembayaran sedang menunggu penyelesaian."
-      );
-    },
-    onError: function () {
-      setMessage(
-        document.querySelector("#checkoutMessage"),
-        "Pembayaran gagal. Silakan coba lagi."
-      );
-    },
-    onClose: function () {
-      setMessage(
-        document.querySelector("#checkoutMessage"),
-        "Halaman pembayaran ditutup. Pesanan tetap tersimpan dan dapat dibayar kembali."
-      );
-    }
-  });
+  window.location.href = result.payment_link_url;
 }
+
 
 
 /* =========================
