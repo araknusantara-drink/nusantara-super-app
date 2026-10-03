@@ -479,7 +479,6 @@ async function showLoggedInView(user) {
 
   await loadAddresses();
   await loadCheckout();
-  await loadCustomerOrders();
 }
 
 
@@ -2176,6 +2175,81 @@ async function checkSession() {
    CUSTOMER ORDERS
 ========================= */
 
+async function showHomePage() {
+  document.querySelector("#ageNotice")?.style.setProperty("display", "block");
+  document.querySelector("#productsSection")?.style.setProperty("display", "block");
+  document.querySelector("#cartSection")?.style.setProperty("display", "block");
+  document.querySelector("#checkoutSection")?.style.setProperty("display", "block");
+  document.querySelector("#customerOrdersSection")?.style.setProperty("display", "none");
+}
+
+async function showOrdersPage() {
+  document.querySelector("#ageNotice")?.style.setProperty("display", "none");
+  document.querySelector("#productsSection")?.style.setProperty("display", "none");
+  document.querySelector("#cartSection")?.style.setProperty("display", "none");
+  document.querySelector("#checkoutSection")?.style.setProperty("display", "none");
+  document.querySelector("#customerOrdersSection")?.style.setProperty("display", "block");
+
+  if (!currentUser) {
+    openAccountPanel();
+    showLoginView();
+    return;
+  }
+
+  await loadCustomerOrders();
+  document.querySelector("#customerOrdersSection")?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+function orderStatusLabel(status) {
+  return ({
+    pending: "Menunggu pembayaran",
+    confirmed: "Pesanan dikonfirmasi",
+    processing: "Sedang diproses",
+    shipped: "Sedang dikirim",
+    delivered: "Pesanan selesai",
+    cancelled: "Pesanan dibatalkan",
+    refunded: "Pesanan dikembalikan"
+  })[status] || status;
+}
+
+function orderTimelineHtml(status) {
+  const steps = [
+    ["pending", "Pesanan dibuat"],
+    ["confirmed", "Dikonfirmasi"],
+    ["processing", "Diproses"],
+    ["shipped", "Dikirim"],
+    ["delivered", "Selesai"]
+  ];
+
+  const order = ["pending", "confirmed", "processing", "shipped", "delivered"];
+  const currentIndex = order.indexOf(status);
+
+  if (status === "cancelled" || status === "refunded") {
+    return `
+      <div style="margin-top:10px;">
+        <strong>${escapeHtml(orderStatusLabel(status))}</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="margin-top:12px;">
+      ${steps.map(([key, label], index) => {
+        const active = currentIndex >= index;
+        return `
+          <div style="padding:6px 0;">
+            <span>${active ? "●" : "○"}</span>
+            ${escapeHtml(label)}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 async function loadCustomerOrders() {
   const container = document.querySelector("#customerOrders");
   if (!container || !currentUser) return;
@@ -2191,6 +2265,7 @@ async function loadCustomerOrders() {
     .select(`
       id,
       order_number,
+      address_id,
       status,
       subtotal,
       discount_amount,
@@ -2209,6 +2284,7 @@ async function loadCustomerOrders() {
       ),
       order_items (
         id,
+        product_id,
         quantity,
         unit_price,
         subtotal,
@@ -2236,44 +2312,26 @@ async function loadCustomerOrders() {
 
   if (!orders.length) {
     container.innerHTML = `
-      <div class="card">
-        Belum ada pesanan.
-      </div>
+      <div class="card">Belum ada pesanan.</div>
     `;
     return;
   }
 
-  const statusText = {
-    pending: "Menunggu pembayaran",
-    confirmed: "Dikonfirmasi",
-    processing: "Diproses",
-    shipped: "Dikirim",
-    delivered: "Selesai",
-    cancelled: "Dibatalkan",
-    refunded: "Dikembalikan"
-  };
-
   container.innerHTML = orders.map(order => {
-    const payment = Array.isArray(order.payments)
-      ? order.payments[0]
-      : order.payments;
+    const payment = Array.isArray(order.payments) ? order.payments[0] : order.payments;
+    const items = Array.isArray(order.order_items) ? order.order_items : [];
+    const paymentStatus = payment?.status || "pending";
+    const canModify =
+      order.status === "pending" &&
+      paymentStatus !== "paid";
 
-    const items = Array.isArray(order.order_items)
-      ? order.order_items
-      : [];
+    const canPay =
+      canModify &&
+      paymentStatus !== "paid";
 
     const itemText = items.length
-      ? items.map(item =>
-          `${escapeHtml(item.products?.name || "Produk")} × ${Number(item.quantity)}`
-        ).join(", ")
+      ? items.map(item => `${escapeHtml(item.products?.name || "Produk")} × ${Number(item.quantity)}`).join(", ")
       : "Detail produk tidak tersedia";
-
-    const paymentStatus = payment?.status || "pending";
-    const canPay =
-      order.status !== "cancelled" &&
-      order.status !== "refunded" &&
-      paymentStatus !== "paid" &&
-      order.status !== "delivered";
 
     const paymentLabel =
       paymentStatus === "paid" ? "Sudah dibayar" :
@@ -2281,13 +2339,27 @@ async function loadCustomerOrders() {
       paymentStatus === "failed" ? "Pembayaran gagal" :
       "Belum dibayar";
 
+    const mapBox = `
+      <div class="card" style="margin-top:12px;">
+        <strong>📍 Perjalanan pesanan</strong>
+        <div id="orderMap_${Number(order.id)}" style="margin-top:8px;min-height:120px;border-radius:12px;overflow:hidden;background:#f2f2f2;">
+          <div style="padding:20px;text-align:center;">
+            Peta perjalanan realtime akan aktif setelah lokasi perjalanan kurir tersedia.
+          </div>
+        </div>
+        <small style="display:block;margin-top:8px;">
+          Status perjalanan diperbarui dari sistem pesanan.
+        </small>
+      </div>
+    `;
+
     return `
       <article class="card" style="margin:10px 0;">
         <strong>${escapeHtml(order.order_number)}</strong>
 
         <div style="margin-top:6px;">
-          Status pesanan:
-          <strong>${escapeHtml(statusText[order.status] || order.status)}</strong>
+          Status:
+          <strong>${escapeHtml(orderStatusLabel(order.status))}</strong>
         </div>
 
         <div style="margin-top:6px;">
@@ -2295,44 +2367,146 @@ async function loadCustomerOrders() {
           <strong>${escapeHtml(paymentLabel)}</strong>
         </div>
 
-        <div style="margin-top:6px;">
-          ${itemText}
-        </div>
+        <div style="margin-top:6px;">${itemText}</div>
 
         <div style="margin-top:6px;">
-          Total:
-          <strong>${rupiah(order.total_amount)}</strong>
+          Total: <strong>${rupiah(order.total_amount)}</strong>
         </div>
 
-        <small style="display:block;margin-top:6px;">
-          ${new Date(order.created_at).toLocaleString("id-ID")}
-        </small>
+        ${orderTimelineHtml(order.status)}
 
         ${canPay ? `
-          <button
-            type="button"
-            class="add"
-            style="margin-top:10px;"
-            onclick="payCustomerOrder(${Number(order.id)})"
-          >
+          <button type="button" class="add" style="margin-top:10px;" onclick="payCustomerOrder(${Number(order.id)})">
             Bayar
           </button>
         ` : ""}
 
-        ${paymentStatus === "paid" ? `
-          <div style="margin-top:10px;">
-            Pembayaran berhasil.
-          </div>
+        ${canModify ? `
+          <button type="button" class="text-btn" onclick="editCustomerOrder(${Number(order.id)})">
+            Edit pesanan
+          </button>
+          <button type="button" class="text-btn" onclick="cancelCustomerOrder(${Number(order.id)})">
+            Cancel pesanan
+          </button>
         ` : ""}
 
         ${order.status === "cancelled" ? `
-          <div style="margin-top:10px;">
-            Pesanan dibatalkan.
-          </div>
+          <button type="button" class="text-btn" onclick="deleteCustomerOrder(${Number(order.id)})">
+            Hapus pesanan
+          </button>
         ` : ""}
+
+        ${mapBox}
+
+        <small style="display:block;margin-top:8px;">
+          ${new Date(order.created_at).toLocaleString("id-ID")}
+        </small>
       </article>
     `;
   }).join("");
+}
+
+async function callCustomerOrderAction(orderId, action) {
+  const session = await supabaseClient.auth.getSession();
+  const accessToken = session?.data?.session?.access_token;
+  if (!accessToken) throw new Error("Sesi login sudah berakhir. Silakan login kembali.");
+
+  const response = await fetch(
+    SUPABASE_FUNCTION_URL + "/customer-order-actions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + accessToken
+      },
+      body: JSON.stringify({
+        order_id: Number(orderId),
+        action
+      })
+    }
+  );
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || "Aksi pesanan gagal.");
+  }
+
+  return result;
+}
+
+async function cancelCustomerOrder(orderId) {
+  if (!confirm("Batalkan pesanan ini? Stok produk akan dikembalikan.")) return;
+
+  try {
+    await callCustomerOrderAction(orderId, "cancel");
+    alert("Pesanan berhasil dibatalkan.");
+    await loadCustomerOrders();
+  } catch (error) {
+    alert("Gagal membatalkan pesanan: " + error.message);
+  }
+}
+
+async function editCustomerOrder(orderId) {
+  if (!confirm("Edit pesanan akan membatalkan pesanan lama dan mengembalikan produknya ke keranjang. Lanjutkan?")) return;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("orders")
+      .select("id, status, payments(status), order_items(product_id, quantity, unit_price, products(id,name,price,image_url))")
+      .eq("id", Number(orderId))
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error("Pesanan tidak ditemukan.");
+
+    const payment = Array.isArray(data.payments) ? data.payments[0] : data.payments;
+    if (data.status !== "pending" || payment?.status === "paid") {
+      throw new Error("Pesanan ini sudah tidak bisa diedit.");
+    }
+
+    await callCustomerOrderAction(orderId, "cancel");
+
+    const items = data.order_items || [];
+    for (const item of items) {
+      const product = item.products;
+      if (!product) continue;
+
+      const existing = cart.find(x => Number(x.id) === Number(product.id));
+      if (existing) {
+        existing.qty += Number(item.quantity);
+      } else {
+        cart.push({
+          id: product.id,
+          name: product.name,
+          price: Number(product.price),
+          image_url: product.image_url,
+          qty: Number(item.quantity)
+        });
+      }
+    }
+
+    localStorage.setItem("nusantara_cart", JSON.stringify(cart));
+    renderCart();
+    await showHomePage();
+    document.querySelector("#cartSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    alert("Pesanan lama dibatalkan dan produknya sudah dikembalikan ke keranjang. Silakan ubah lalu checkout lagi.");
+  } catch (error) {
+    alert("Gagal mengedit pesanan: " + error.message);
+  }
+}
+
+async function deleteCustomerOrder(orderId) {
+  if (!confirm("Hapus pesanan yang sudah dibatalkan ini?")) return;
+
+  try {
+    await callCustomerOrderAction(orderId, "delete");
+    alert("Pesanan berhasil dihapus.");
+    await loadCustomerOrders();
+  } catch (error) {
+    alert("Gagal menghapus pesanan: " + error.message);
+  }
 }
 
 async function payCustomerOrder(orderId) {
@@ -2349,10 +2523,7 @@ async function payCustomerOrder(orderId) {
     await startXenditPayment(orderId);
   } catch (error) {
     console.error("Customer order payment error:", error);
-    setMessage(
-      message,
-      "Pembayaran belum dapat dibuka: " + error.message
-    );
+    setMessage(message, "Pembayaran belum dapat dibuka: " + error.message);
     await loadCustomerOrders();
   }
 }
@@ -2444,10 +2615,8 @@ function setupNavigation() {
       "click",
       () => {
 
-        window.scrollTo({
-          top: 0,
-          behavior: "smooth"
-        });
+        await showHomePage();
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     );
   }
@@ -2475,18 +2644,7 @@ function setupNavigation() {
           return;
         }
 
-        openAccountPanel();
-        const loggedInView = document.querySelector("#loggedInView");
-        if (loggedInView) {
-          loggedInView.style.display = "block";
-        }
-        await loadCustomerOrders();
-
-        document.querySelector("#customerOrdersSection")
-          ?.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-          });
+        await showOrdersPage();
       }
     );
   }
@@ -2643,6 +2801,8 @@ supabaseClient.auth.onAuthStateChange(
 ========================= */
 
 renderCart();
+
+showHomePage();
 
 setupNavigation();
 
