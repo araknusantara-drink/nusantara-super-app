@@ -58,17 +58,16 @@ function clearRoute(){
 async function loadOrderData(){
   const id=Number($("orders").value);
   if(!id){currentOrder=null;return}
-  const o=await db.from("orders").select("id,order_number,status,address_id,addresses(recipient_name,address_line,city,province,latitude,longitude)").eq("id",id).maybeSingle();
-  if(o.error||!o.data){$("orderInfo").textContent="Gagal memuat order.";return}
-  currentOrder=o.data;
-  const a=o.data.addresses;
+  const r=await db.rpc("courier_order_detail",{p_order_id:id});
+  const d=r.data;
+  if(r.error||!d?.order){$("orderInfo").textContent="Gagal memuat detail order: "+(r.error?.message||"order tidak ditemukan");return}
+  currentOrder=d.order;
+  const a=d.order.address;
   destination=(a&&a.latitude!=null&&a.longitude!=null)?{lat:Number(a.latitude),lng:Number(a.longitude)}:null;
-
-  const s=await db.from("business_settings").select("setting_value").eq("setting_key","shipping").maybeSingle();
-  const v=s.data?.setting_value||{};
+  const v=d.store||{};
   store=(v.store_lat!=null&&v.store_lng!=null)?{lat:Number(v.store_lat),lng:Number(v.store_lng)}:null;
 
-  $("orderInfo").innerHTML="<b>"+o.data.order_number+"</b> · "+o.data.status+
+  $("orderInfo").innerHTML="<b>"+d.order.order_number+"</b> · "+d.order.status+
     (a?"<br>📍 "+(a.recipient_name||"Customer")+" — "+(a.address_line||"")+", "+(a.city||""):"");
   renderMap();
 }
@@ -172,7 +171,7 @@ $("orders").onchange=async()=>{
 $("refresh").onclick=orders;
 
 async function orders(){
-  const r=await db.from("orders").select("id,order_number,status").in("status",["confirmed","processing","shipped"]).order("created_at",{ascending:false});
+  const r=await db.rpc("courier_active_orders");
   if(r.error){$("orderInfo").textContent="Gagal memuat order: "+r.error.message;return}
   const list=r.data||[];
   $("orders").innerHTML=list.length?list.map(o=>'<option value="'+o.id+'">'+o.order_number+" — "+o.status+"</option>").join(""):"<option value=''>Tidak ada order aktif</option>";
