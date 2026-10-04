@@ -603,44 +603,40 @@ async function loadDashboard() {
 
   const now = new Date();
   const period = $("period").value;
+  let startDate;
 
-  let start;
+  if (period === "year") startDate = new Date(now.getFullYear(), 0, 1);
+  else if (period === "month") startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  else startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  if (period === "year") {
-    start = new Date(now.getFullYear(), 0, 1);
-  } else if (period === "month") {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
+  const iso = startDate.toISOString();
 
-  const [paymentResult, orderResult] = await Promise.all([
+  const [paymentResult, refundResult, orderResult] = await Promise.all([
     db.from("payments")
-      .select("amount,status,refund_status,refund_amount,created_at")
-      .gte("created_at", start.toISOString()),
+      .select("amount,status,created_at")
+      .gte("created_at", iso)
+      .in("status", ["paid", "refunded"]),
+
+    db.from("payments")
+      .select("refund_amount,refunded_at")
+      .eq("refund_status", "succeeded")
+      .gte("refunded_at", iso),
 
     db.from("orders")
       .select("id,status,created_at")
-      .gte("created_at", start.toISOString())
+      .gte("created_at", iso)
       .neq("status", "cancelled")
   ]);
 
-  if (paymentResult.error || orderResult.error) return;
+  if (paymentResult.error || refundResult.error || orderResult.error) return;
 
   const payments = paymentResult.data || [];
+  const refunds = refundResult.data || [];
   const orders = orderResult.data || [];
 
-  const gross = payments.reduce((total, row) => {
-    if (!["paid", "refunded"].includes(row.status)) return total;
-    return total + Number(row.amount || 0);
-  }, 0);
-
-  const refunds = payments.reduce((total, row) => {
-    if (row.refund_status !== "succeeded") return total;
-    return total + Number(row.refund_amount || 0);
-  }, 0);
-
-  const net = Math.max(0, gross - refunds);
+  const gross = payments.reduce((total, row) => total + Number(row.amount || 0), 0);
+  const refundTotal = refunds.reduce((total, row) => total + Number(row.refund_amount || 0), 0);
+  const net = gross - refundTotal;
 
   $("sales").textContent = rupiah(net);
   $("orderCount").textContent = orders.length;
@@ -1093,6 +1089,15 @@ async function loadPayments() {
 
 async function processPaymentRefund(orderId) {
   if (!user) return;
+
+  const payment = await db.from("payments")
+    .select("refund_status,refund_reason")
+    .eq("order_id", Number(orderId))
+    .order("id", { ascending:false })
+    .limit(1)
+    .maybeSingle();
+
+  const reason = payment.data?.refund_reason || "CANCELLATION";
   if (!confirm("Proses FULL REFUND untuk order #" + orderId + "?\n\nDana akan dikembalikan melalui Xendit ke metode pembayaran asal.")) return;
 
   try {
@@ -1103,7 +1108,7 @@ async function processPaymentRefund(orderId) {
     const response = await fetch(SUPABASE_URL + "/functions/v1/payment-refund", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
-      body: JSON.stringify({ order_id: Number(orderId), action: "execute", reason: "CANCELLATION" })
+      body: JSON.stringify({ order_id:Number(orderId), action:"execute", reason })
     });
 
     const result = await response.json().catch(() => ({}));
