@@ -26,6 +26,7 @@ let currentUser = null;
 let customerAddresses = [];
 let orderMapInstances = {};
 let orderMapChannels = {};
+let paymentRealtimeChannel = null;
 let editingAddressId = null;
 
 
@@ -2338,6 +2339,7 @@ async function initAllOrderMaps(orders) {
 }
 
 async function loadCustomerOrders() {
+  await setupCustomerPaymentRealtime();
   const container = document.querySelector("#customerOrders");
   if (!container || !currentUser) return;
 
@@ -2367,7 +2369,10 @@ async function loadCustomerOrders() {
         payment_bank_code,
         payment_ewallet_code,
         status,
-        transaction_id
+        transaction_id,
+        refund_status,
+        refund_amount,
+        refund_reason
       ),
       order_items (
         id,
@@ -2421,10 +2426,23 @@ async function loadCustomerOrders() {
       : "Detail produk tidak tersedia";
 
     const paymentLabel =
-      paymentStatus === "paid" ? "Sudah dibayar" :
-      paymentStatus === "expired" ? "Pembayaran kedaluwarsa" :
-      paymentStatus === "failed" ? "Pembayaran gagal" :
-      "Belum dibayar";
+      paymentStatus === "paid"
+        ? (payment?.refund_status === "succeeded"
+            ? "Sudah direfund"
+            : payment?.refund_status === "requested"
+              ? "Refund diajukan"
+              : payment?.refund_status === "pending"
+                ? "Refund diproses"
+                : payment?.refund_status === "failed"
+                  ? "Refund gagal"
+                  : "Sudah dibayar")
+        : paymentStatus === "expired" ? "Pembayaran kedaluwarsa" :
+          paymentStatus === "failed" ? "Pembayaran gagal" :
+          "Belum dibayar";
+
+    const canRequestRefund =
+      paymentStatus === "paid" &&
+      ["none", "failed"].includes(payment?.refund_status || "none");
 
     const mapBox = `      <div class="card" style="margin-top:12px;">
         <strong>📍 Perjalanan pesanan</strong>
@@ -2479,6 +2497,24 @@ async function loadCustomerOrders() {
           </button>
         ` : ""}
 
+        ${canRequestRefund ? `
+          <button type="button" class="text-btn" onclick="requestCustomerRefund(${Number(order.id)})">
+            Ajukan refund
+          </button>
+        ` : ""}
+
+        ${payment?.refund_status === "requested" ? `
+          <small style="display:block;margin-top:8px;">
+            ⏳ Permintaan refund sedang menunggu Owner.
+          </small>
+        ` : ""}
+
+        ${payment?.refund_status === "succeeded" ? `
+          <small style="display:block;margin-top:8px;">
+            ✓ Refund berhasil diproses.
+          </small>
+        ` : ""}
+
         ${mapBox}
 
         <small style="display:block;margin-top:8px;">
@@ -2489,6 +2525,49 @@ async function loadCustomerOrders() {
   }).join("");
 
   await initAllOrderMaps(orders);
+}
+
+async function setupCustomerPaymentRealtime() {
+  if (paymentRealtimeChannel) {
+    await supabaseClient.removeChannel(paymentRealtimeChannel);
+    paymentRealtimeChannel = null;
+  }
+
+  paymentRealtimeChannel = supabaseClient
+    .channel("customer-payment-realtime")
+    .on("postgres_changes", { event:"*", schema:"public", table:"payments" }, async () => {
+      if (currentUser) await loadCustomerOrders();
+    })
+    .subscribe();
+}
+
+async function callPaymentRefund(orderId, action, reason = "REQUESTED_BY_CUSTOMER") {
+  const session = await supabaseClient.auth.getSession();
+  const accessToken = session?.data?.session?.access_token;
+  if (!accessToken) throw new Error("Sesi login sudah berakhir. Silakan login kembali.");
+
+  const response = await fetch(SUPABASE_FUNCTION_URL + "/payment-refund", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
+    body: JSON.stringify({ order_id:Number(orderId), action, reason })
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || result.detail?.message || "Aksi refund gagal.");
+  }
+  return result;
+}
+
+async function requestCustomerRefund(orderId) {
+  if (!confirm("Ajukan refund untuk pembayaran pesanan ini?\n\nPermintaan akan masuk ke Owner untuk diproses.")) return;
+  try {
+    const result = await callPaymentRefund(orderId, "request", "REQUESTED_BY_CUSTOMER");
+    alert(result.message || "Permintaan refund berhasil diajukan.");
+    await loadCustomerOrders();
+  } catch (error) {
+    alert("Refund gagal diajukan: " + error.message);
+  }
 }
 
 async function callCustomerOrderAction(orderId, action) {
