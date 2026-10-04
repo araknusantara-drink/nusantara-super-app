@@ -600,83 +600,49 @@ window.deleteProduct =
 async function loadDashboard() {
 
   const now = new Date();
-
-  const period =
-    $("period").value;
-
+  const period = $("period").value;
 
   let start;
 
-
   if (period === "year") {
-
-    start =
-      new Date(
-        now.getFullYear(),
-        0,
-        1
-      );
-
+    start = new Date(now.getFullYear(), 0, 1);
   } else if (period === "month") {
-
-    start =
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1
-      );
-
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
   } else {
-
-    start =
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
-
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
 
+  const [paymentResult, orderResult] = await Promise.all([
+    db.from("payments")
+      .select("amount,status,refund_status,refund_amount,created_at")
+      .gte("created_at", start.toISOString()),
 
-  const result =
-    await db
-      .from("orders")
-      .select(
-        "id,total_amount,status,created_at"
-      )
-      .gte(
-        "created_at",
-        start.toISOString()
-      )
-      .neq(
-        "status",
-        "cancelled"
-      );
+    db.from("orders")
+      .select("id,status,created_at")
+      .gte("created_at", start.toISOString())
+      .neq("status", "cancelled")
+  ]);
 
+  if (paymentResult.error || orderResult.error) return;
 
-  if (result.error) return;
+  const payments = paymentResult.data || [];
+  const orders = orderResult.data || [];
 
+  const gross = payments.reduce((total, row) => {
+    if (!["paid", "refunded"].includes(row.status)) return total;
+    return total + Number(row.amount || 0);
+  }, 0);
 
-  const rows =
-    result.data || [];
+  const refunds = payments.reduce((total, row) => {
+    if (row.refund_status !== "succeeded") return total;
+    return total + Number(row.refund_amount || 0);
+  }, 0);
 
+  const net = Math.max(0, gross - refunds);
 
-  $("sales").textContent =
-    rupiah(
-      rows.reduce(
-        (total, row) =>
-          total +
-          Number(row.total_amount || 0),
-        0
-      )
-    );
-
-
-  $("orderCount").textContent =
-    rows.length;
-
+  $("sales").textContent = rupiah(net);
+  $("orderCount").textContent = orders.length;
 }
-
 
 /* =========================
    ORDERS
@@ -1069,183 +1035,70 @@ window.deleteCustomer = async function(id) {
 
 async function loadPayments() {
 
-  let query =
-    db
-      .from("payments")
-      .select("*")
-      .limit(500);
-
-
-  const period =
-    $("payPeriod").value;
-
-  const now =
-    new Date();
-
-
+  let query = db.from("payments").select("*").limit(500);
+  const period = $("payPeriod").value;
+  const now = new Date();
   let start = null;
 
+  if (period === "today") start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (period === "month") start = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (period === "year") start = new Date(now.getFullYear(), 0, 1);
+  if (start) query = query.gte("created_at", start.toISOString());
 
-  if (period === "today") {
+  const result = await query;
+  let rows = result.data || [];
+  const sort = $("paySort").value;
 
-    start =
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
+  if (sort === "az") rows.sort((a,b) => String(a.transaction_id || "").localeCompare(String(b.transaction_id || "")));
+  if (sort === "date_asc") rows.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  if (sort === "date_desc") rows.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  if (sort === "amount_desc") rows.sort((a,b) => Number(b.amount) - Number(a.amount));
 
-  }
-
-
-  if (period === "month") {
-
-    start =
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1
-      );
-
-  }
-
-
-  if (period === "year") {
-
-    start =
-      new Date(
-        now.getFullYear(),
-        0,
-        1
-      );
-
-  }
-
-
-  if (start) {
-
-    query =
-      query.gte(
-        "created_at",
-        start.toISOString()
-      );
-
-  }
-
-
-  const result =
-    await query;
-
-
-  let rows =
-    result.data || [];
-
-
-  const sort =
-    $("paySort").value;
-
-
-  if (sort === "az") {
-
-    rows.sort(
-      (a, b) =>
-        String(
-          a.transaction_id || ""
-        ).localeCompare(
-          String(
-            b.transaction_id || ""
-          )
-        )
-    );
-
-  }
-
-
-  if (sort === "date_asc") {
-
-    rows.sort(
-      (a, b) =>
-        new Date(a.created_at) -
-        new Date(b.created_at)
-    );
-
-  }
-
-
-  if (sort === "date_desc") {
-
-    rows.sort(
-      (a, b) =>
-        new Date(b.created_at) -
-        new Date(a.created_at)
-    );
-
-  }
-
-
-  if (sort === "amount_desc") {
-
-    rows.sort(
-      (a, b) =>
-        Number(b.amount) -
-        Number(a.amount)
-    );
-
-  }
-
-
-  $("payRows").innerHTML =
-    result.error
-      ? `
-        <tr>
-          <td colspan="6">
-            ${esc(result.error.message)}
-          </td>
-        </tr>
-      `
-      :
-      rows.map(payment => `
-
-        <tr>
-
-          <td>
-            ${esc(
-              payment.transaction_id || "-"
-            )}
-          </td>
-
-          <td>
-            ${payment.order_id}
-          </td>
-
-          <td>
-            ${esc(
-              payment.payment_method || "-"
-            )}
-          </td>
-
-          <td>
-            ${esc(payment.status)}
-          </td>
-
-          <td>
-            ${rupiah(payment.amount)}
-          </td>
-
-          <td>
-            ${new Date(
-              payment.created_at
-            ).toLocaleString(
-              "id-ID"
-            )}
-          </td>
-
-        </tr>
-
-      `).join("");
-
+  $("payRows").innerHTML = result.error
+    ? "<tr><td colspan=\"7\">" + esc(result.error.message) + "</td></tr>"
+    : rows.map(payment => {
+        const refundLabel = payment.refund_status === "succeeded" ? "Refund berhasil" :
+          payment.refund_status === "pending" ? "Refund diproses" :
+          payment.refund_status === "requested" ? "Menunggu Owner" :
+          payment.refund_status === "failed" ? "Refund gagal" : "-";
+        const canRefund = payment.status === "paid" && ["none","requested","failed"].includes(payment.refund_status);
+        return "<tr>" +
+          "<td>" + esc(payment.transaction_id || "-") + "</td>" +
+          "<td>" + payment.order_id + "</td>" +
+          "<td>" + esc(payment.payment_method || "-") + "</td>" +
+          "<td>" + esc(payment.status) + (payment.refund_status && payment.refund_status !== "none" ? "<br><small>" + esc(refundLabel) + "</small>" : "") + "</td>" +
+          "<td>" + rupiah(payment.amount) + "</td>" +
+          "<td>" + new Date(payment.created_at).toLocaleString("id-ID") + "</td>" +
+          "<td>" + (canRefund ? "<button type=\"button\" onclick=\"processPaymentRefund(" + Number(payment.order_id) + ")\">" + (payment.refund_status === "requested" ? "Proses Refund" : "Refund") + "</button>" : "-") + "</td>" +
+          "</tr>";
+      }).join("");
 }
 
+async function processPaymentRefund(orderId) {
+  if (!user) return;
+  if (!confirm("Proses FULL REFUND untuk order #" + orderId + "?\n\nDana akan dikembalikan melalui Xendit ke metode pembayaran asal.")) return;
+
+  try {
+    const session = await db.auth.getSession();
+    const accessToken = session?.data?.session?.access_token;
+    if (!accessToken) throw new Error("Sesi login sudah berakhir.");
+
+    const response = await fetch(SUPABASE_URL + "/functions/v1/payment-refund", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
+      body: JSON.stringify({ order_id: Number(orderId), action: "execute", reason: "CANCELLATION" })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || result.detail?.message || "Refund gagal diproses.");
+
+    alert(result.status === "succeeded" ? "Refund berhasil diproses." : "Refund sudah dikirim ke Xendit. Menunggu konfirmasi webhook.");
+    await loadPayments();
+    await loadDashboard();
+  } catch (error) {
+    alert("Refund gagal: " + error.message);
+  }
+}
 
 /* =========================
    SHIFT
