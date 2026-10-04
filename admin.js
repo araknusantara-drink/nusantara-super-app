@@ -10,6 +10,7 @@ let user = null;
 let me = null;
 let products = [];
 let shift = null;
+let paymentRealtimeChannel = null;
 
 const $ = id => document.getElementById(id);
 
@@ -125,6 +126,7 @@ async function start() {
 
     setupTabs();
     setupButtons();
+    setupPaymentRealtime();
 
 
     await loadProducts();
@@ -1032,6 +1034,21 @@ window.deleteCustomer = async function(id) {
 /* =========================
    PAYMENTS
 ========================= */
+
+function setupPaymentRealtime() {
+  if (paymentRealtimeChannel) {
+    db.removeChannel(paymentRealtimeChannel);
+    paymentRealtimeChannel = null;
+  }
+
+  paymentRealtimeChannel = db
+    .channel("owner-payment-realtime")
+    .on("postgres_changes", { event:"*", schema:"public", table:"payments" }, async () => {
+      await loadPayments();
+      await loadDashboard();
+    })
+    .subscribe();
+}
 
 async function loadPayments() {
 
