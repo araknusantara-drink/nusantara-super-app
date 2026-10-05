@@ -600,38 +600,128 @@ window.deleteProduct =
 ========================= */
 
 async function loadDashboard() {
+
   const now = new Date();
   const period = $("period").value;
   let startDate;
   if (period === "year") startDate = new Date(now.getFullYear(), 0, 1);
   else if (period === "month") startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   else startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
   const iso = startDate.toISOString();
-  const [paymentResult, refundResult, orderResult, itemResult] = await Promise.all([
-    db.from("payments").select("amount,status,created_at,refund_amount,refund_status").gte("created_at", iso).in("status", ["paid","refunded"]),
-    db.from("payments").select("refund_amount,refunded_at").eq("refund_status","succeeded").gte("refunded_at", iso),
-    db.from("orders").select("id,status,created_at,total_amount,discount_amount").gte("created_at", iso).neq("status","cancelled"),
-    db.from("order_items").select("product_id,quantity,unit_price,subtotal,orders!inner(created_at,status),products(name,cost_price)").gte("orders.created_at", iso).in("orders.status", ["confirmed","processing","shipped","delivered","refunded"])
+
+  const [paymentResult, refundResult, orderResult] = await Promise.all([
+    db.from("payments")
+      .select("amount,status,created_at")
+      .gte("created_at", iso)
+      .in("status", ["paid","refunded"]),
+
+    db.from("payments")
+      .select("refund_amount,refunded_at")
+      .eq("refund_status","succeeded")
+      .gte("refunded_at", iso),
+
+    db.from("orders")
+      .select("id,status,created_at,total_amount,discount_amount")
+      .gte("created_at", iso)
+      .neq("status","cancelled")
   ]);
-  if (paymentResult.error || refundResult.error || orderResult.error || itemResult.error) return;
-  const payments = paymentResult.data || [], refunds = refundResult.data || [], orders = orderResult.data || [], items = itemResult.data || [];
+
+  if (paymentResult.error || refundResult.error || orderResult.error) {
+    console.error("ANALYTICS ERROR", paymentResult.error || refundResult.error || orderResult.error);
+    return;
+  }
+
+  const payments = paymentResult.data || [];
+  const refunds = refundResult.data || [];
+  const orders = orderResult.data || [];
+
   const gross = payments.reduce((t,r) => t + Number(r.amount || 0), 0);
   const refundTotal = refunds.reduce((t,r) => t + Number(r.refund_amount || 0), 0);
   const net = gross - refundTotal;
   const avg = orders.length ? net / orders.length : 0;
-  const grossProfit = items.reduce((t,r) => t + ((Number(r.unit_price||0) - Number(r.products?.cost_price||0)) * Number(r.quantity||0)), 0) - refundTotal;
-  const lowStock = products.filter(p => Number(p.stock||0) <= Number(p.min_stock||0));
+
+  let items = [];
+  const orderIds = orders.map(o => o.id);
+
+  if (orderIds.length) {
+    const itemResult = await db.from("order_items")
+      .select("order_id,product_id,quantity,unit_price,subtotal,products(name,cost_price)")
+      .in("order_id", orderIds);
+
+    if (!itemResult.error) items = itemResult.data || [];
+    else console.error("ANALYTICS ITEM ERROR", itemResult.error);
+  }
+
+  const grossProfit =
+    items.reduce(
+      (t,r) =>
+        t +
+        ((Number(r.unit_price || 0) -
+          Number(r.products?.cost_price || 0)) *
+          Number(r.quantity || 0)),
+      0
+    ) - refundTotal;
+
+  const lowStock =
+    products.filter(
+      p => Number(p.stock || 0) <= Number(p.min_stock || 0)
+    );
+
   $("sales").textContent = rupiah(net);
   $("orderCount").textContent = orders.length;
   $("refundTotal").textContent = rupiah(refundTotal);
   $("grossProfit").textContent = rupiah(grossProfit);
   $("avgOrder").textContent = rupiah(avg);
   $("lowStockCount").textContent = lowStock.length;
+
   const top = {};
-  items.forEach(r => { const id=r.product_id; if(!top[id]) top[id]={name:r.products?.name||("Produk #"+id),qty:0,sales:0}; top[id].qty+=Number(r.quantity||0); top[id].sales+=Number(r.subtotal||0); });
-  const topRows = Object.values(top).sort((a,b)=>b.qty-a.qty).slice(0,5);
-  $("topProducts").innerHTML = topRows.length ? topRows.map((r,i) => "<p><b>"+(i+1)+". "+esc(r.name)+"</b><br><small>"+r.qty+" terjual · "+rupiah(r.sales)+"</small></p>").join("") : "<p>Belum ada penjualan.</p>";
-  $("lowStockProducts").innerHTML = lowStock.length ? lowStock.slice().sort((a,b)=>Number(a.stock)-Number(b.stock)).slice(0,8).map(p => "<p><b>"+esc(p.name)+"</b><br><small>Stok "+Number(p.stock||0)+" · minimum "+Number(p.min_stock||0)+"</small></p>").join("") : "<p>Semua stok aman.</p>";
+
+  items.forEach(r => {
+    const id = r.product_id;
+
+    if (!top[id]) {
+      top[id] = {
+        name: r.products?.name || ("Produk #" + id),
+        qty: 0,
+        sales: 0
+      };
+    }
+
+    top[id].qty += Number(r.quantity || 0);
+    top[id].sales += Number(r.subtotal || 0);
+  });
+
+  const topRows =
+    Object.values(top)
+      .sort((a,b) => b.qty - a.qty)
+      .slice(0,5);
+
+  $("topProducts").innerHTML =
+    topRows.length
+      ? topRows.map((r,i) =>
+          "<p><b>" + (i+1) + ". " + esc(r.name) +
+          "</b><br><small>" + r.qty +
+          " terjual · " + rupiah(r.sales) +
+          "</small></p>"
+        ).join("")
+      : "<p>Belum ada penjualan.</p>";
+
+  $("lowStockProducts").innerHTML =
+    lowStock.length
+      ? lowStock
+          .slice()
+          .sort((a,b) => Number(a.stock) - Number(b.stock))
+          .slice(0,8)
+          .map(p =>
+            "<p><b>" + esc(p.name) +
+            "</b><br><small>Stok " +
+            Number(p.stock || 0) +
+            " · minimum " +
+            Number(p.min_stock || 0) +
+            "</small></p>"
+          ).join("")
+      : "<p>Semua stok aman.</p>";
 }
 
 /* =========================
