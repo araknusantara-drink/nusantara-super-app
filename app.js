@@ -2308,6 +2308,14 @@ async function showHomePage() {
 }
 
 async function showOrdersPage() {
+  // Pastikan sesi dan currentUser siap sebelum memuat riwayat pesanan.
+  if (!currentUser) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session?.user) {
+      currentUser = session.user;
+    }
+  }
+
   document.querySelector("#ageNotice")?.style.setProperty("display", "none");
   document.querySelector("#productsSection")?.style.setProperty("display", "none");
   document.querySelector("#cartSection")?.style.setProperty("display", "none");
@@ -2929,6 +2937,9 @@ function setupNavigation() {
           return;
         }
 
+        // Set user dari session terlebih dahulu agar Pesanan
+        // langsung memuat riwayat tanpa harus membuka Home.
+        currentUser = session.user;
         await showOrdersPage();
       }
     );
