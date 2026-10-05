@@ -336,6 +336,62 @@
 
     <hr>
 
+    <!-- SECURITY -->
+
+    <h3>Keamanan akun</h3>
+
+    <form id="passwordForm">
+
+      <label for="currentPassword">
+        Password saat ini
+      </label>
+
+      <input
+        id="currentPassword"
+        type="password"
+        minlength="6"
+        autocomplete="current-password"
+        placeholder="Password saat ini"
+        required
+      >
+
+      <label for="newPassword">
+        Password baru
+      </label>
+
+      <input
+        id="newPassword"
+        type="password"
+        minlength="8"
+        autocomplete="new-password"
+        placeholder="Minimal 8 karakter"
+        required
+      >
+
+      <label for="confirmPassword">
+        Ulangi password baru
+      </label>
+
+      <input
+        id="confirmPassword"
+        type="password"
+        minlength="8"
+        autocomplete="new-password"
+        placeholder="Ulangi password baru"
+        required
+      >
+
+      <button type="submit" class="add">
+        Ganti password
+      </button>
+
+    </form>
+
+    <p id="passwordMessage"></p>
+
+
+    <hr>
+
     <button
       type="button"
       class="add"
@@ -502,7 +558,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=20261004-1"></script>
+<script src="app.js?v=20261005-2"></script>
 
 </body>
 </html>
