@@ -228,13 +228,12 @@ function renderProducts() {
 
           <button
             type="button"
-            class="text-btn"
-            aria-label="Favorit"
-            title="Favorit"
+            class="wishlist-btn"
+            aria-label="${wishlistProductIds.has(Number(p.id)) ? "Hapus dari wishlist" : "Tambah ke wishlist"}"
+            title="${wishlistProductIds.has(Number(p.id)) ? "Hapus dari wishlist" : "Tambah ke wishlist"}"
             onclick="toggleWishlist(${Number(p.id)})"
-            style="position:absolute;top:8px;right:8px;font-size:22px;line-height:1;padding:4px 8px;z-index:2;"
           >
-            ${wishlistProductIds.has(Number(p.id)) ? "❤️" : "🤍"}
+            ${wishlistProductIds.has(Number(p.id)) ? "❤️ Favorit" : "♡ Favorit"}
           </button>
 
           <div class="product-image">
