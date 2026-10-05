@@ -28,6 +28,7 @@ let orderMapInstances = {};
 let orderMapChannels = {};
 let paymentRealtimeChannel = null;
 let editingAddressId = null;
+let wishlistProductIds = new Set();
 
 
 /* =========================
@@ -78,6 +79,114 @@ function iconForProduct(name) {
 
 
 /* =========================
+   WISHLIST
+========================= */
+
+async function loadWishlist() {
+  wishlistProductIds = new Set();
+
+  if (!currentUser) {
+    renderWishlist();
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("wishlists")
+    .select("product_id")
+    .eq("user_id", currentUser.id);
+
+  if (error) {
+    console.error("Wishlist load error:", error);
+    renderWishlist(error.message);
+    return;
+  }
+
+  (data || []).forEach(item => {
+    wishlistProductIds.add(Number(item.product_id));
+  });
+
+  renderProducts();
+  renderWishlist();
+}
+
+function renderWishlist(errorMessage = "") {
+  const container = document.querySelector("#wishlistSection");
+  if (!container) return;
+
+  if (!currentUser) {
+    container.innerHTML = "Login untuk melihat produk favorit.";
+    return;
+  }
+
+  if (errorMessage) {
+    container.innerHTML = "<p>Gagal memuat favorit: " + escapeHtml(errorMessage) + "</p>";
+    return;
+  }
+
+  const favoriteProducts = products.filter(p => wishlistProductIds.has(Number(p.id)));
+
+  if (!favoriteProducts.length) {
+    container.innerHTML = "<p>Belum ada produk favorit.</p>";
+    return;
+  }
+
+  container.innerHTML = favoriteProducts.map(p => {
+    const image = p.image_url
+      ? "<img src=\"" + escapeHtml(p.image_url) + "\" alt=\"" + escapeHtml(p.name) + "\" style=\"width:54px;height:54px;object-fit:cover;border-radius:8px;\">"
+      : iconForProduct(p.name);
+    return "<div class=\"card\" style=\"margin:10px 0;display:flex;gap:10px;align-items:center;\">" +
+      "<div style=\"font-size:28px;\">" + image + "</div>" +
+      "<div style=\"flex:1;\"><strong>" + escapeHtml(p.name) + "</strong><div>" + rupiah(p.price) + "</div></div>" +
+      "<button type=\"button\" class=\"text-btn\" onclick=\"addToCart(" + Number(p.id) + ")\">Tambah</button>" +
+      "<button type=\"button\" class=\"text-btn\" onclick=\"toggleWishlist(" + Number(p.id) + ")\">💔</button>" +
+      "</div>";
+  }).join("");
+}
+
+async function toggleWishlist(productId) {
+  if (!currentUser) {
+    openAccountPanel();
+    showLoginView();
+    return;
+  }
+
+  const id = Number(productId);
+  const isFavorite = wishlistProductIds.has(id);
+
+  if (isFavorite) {
+    const { error } = await supabaseClient
+      .from("wishlists")
+      .delete()
+      .eq("user_id", currentUser.id)
+      .eq("product_id", id);
+
+    if (error) {
+      console.error("Wishlist delete error:", error);
+      alert("Gagal menghapus favorit: " + error.message);
+      return;
+    }
+
+    wishlistProductIds.delete(id);
+  } else {
+    const { error } = await supabaseClient
+      .from("wishlists")
+      .insert({ user_id: currentUser.id, product_id: id });
+
+    if (error) {
+      console.error("Wishlist insert error:", error);
+      alert("Gagal menambahkan favorit: " + error.message);
+      return;
+    }
+
+    wishlistProductIds.add(id);
+  }
+
+  renderProducts();
+  renderWishlist();
+}
+
+
+/* =========================
    PRODUCTS
 ========================= */
 
@@ -115,7 +224,18 @@ function renderProducts() {
         : iconForProduct(p.name);
 
       return `
-        <article class="product">
+        <article class="product" style="position:relative;">
+
+          <button
+            type="button"
+            class="text-btn"
+            aria-label="Favorit"
+            title="Favorit"
+            onclick="toggleWishlist(${Number(p.id)})"
+            style="position:absolute;top:8px;right:8px;font-size:22px;line-height:1;padding:4px 8px;z-index:2;"
+          >
+            ${wishlistProductIds.has(Number(p.id)) ? "❤️" : "🤍"}
+          </button>
 
           <div class="product-image">
             ${image}
@@ -480,6 +600,7 @@ async function showLoggedInView(user) {
 
   await loadCustomerProfile(user);
 
+  await loadWishlist();
   await loadAddresses();
   await loadCheckout();
 }
