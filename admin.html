@@ -77,6 +77,10 @@
         💰 Pembayaran
       </button>
 
+      <button type="button" data-tab="promos">
+        🎟️ Promo
+      </button>
+
       <button type="button" data-tab="shifts">
         🔄 Shift
       </button>
@@ -537,6 +541,31 @@
     </section>
 
 
+    <!-- PROMO -->
+    <section id="promos" class="tab" hidden>
+      <div class="title">
+        <h2>Promo / Voucher</h2>
+        <button id="addPromo" type="button">+ Tambah Promo</button>
+      </div>
+      <form id="promoForm" hidden class="card grid">
+        <input type="hidden" id="promoId">
+        <label>Kode<input id="promoCode" required placeholder="Contoh: NUSANTARA10"></label>
+        <label>Tipe<select id="promoType"><option value="percent">Persen (%)</option><option value="fixed">Nominal (Rp)</option></select></label>
+        <label>Nilai<input id="promoValue" type="number" min="0.01" step="0.01" required></label>
+        <label>Minimum belanja<input id="promoMin" type="number" min="0" value="0"></label>
+        <label>Maksimum diskon<input id="promoMax" type="number" min="0" placeholder="Opsional"></label>
+        <label>Batas penggunaan<input id="promoLimit" type="number" min="1" placeholder="Opsional"></label>
+        <label>Batas per customer<input id="promoPerUser" type="number" min="1" value="1"></label>
+        <label>Mulai<input id="promoStart" type="datetime-local"></label>
+        <label>Berakhir<input id="promoEnd" type="datetime-local"></label>
+        <label>Aktif<select id="promoActive"><option value="true">Ya</option><option value="false">Tidak</option></select></label>
+        <div class="wide"><button type="submit">Simpan</button><button type="button" id="cancelPromo">Batal</button></div>
+        <p id="promoMsg" class="wide"></p>
+      </form>
+      <div class="table"><table><thead><tr><th>Kode</th><th>Diskon</th><th>Minimum</th><th>Dipakai</th><th>Periode</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="promoRows"></tbody></table></div>
+    </section>
+
+
     <!-- SHIFT -->
     <section id="shifts" class="tab" hidden>
 
@@ -664,7 +693,7 @@
 
 
 <!-- DASHBOARD JS -->
-<script src="admin.js?v=20261005-1"></script>
+<script src="admin.js?v=20261006-2"></script>
 
 
 <!-- DETEKSI ERROR -->
