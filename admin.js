@@ -1199,7 +1199,11 @@ async function processPaymentRefund(orderId) {
     });
 
     const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) throw new Error(result.error || result.detail?.message || "Refund gagal diproses.");
+    if (!response.ok || !result.ok) {
+      const code = result.xendit_error_code ? " [" + result.xendit_error_code + "]" : "";
+      const detail = result.detail?.message ? " — " + result.detail.message : "";
+      throw new Error((result.error || "Refund gagal diproses.") + code + detail);
+    }
 
     alert(result.status === "succeeded" ? "Refund berhasil diproses." : "Refund sudah dikirim ke Xendit. Menunggu konfirmasi webhook.");
     await loadPayments();
