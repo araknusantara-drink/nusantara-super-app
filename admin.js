@@ -134,6 +134,7 @@ async function start() {
     await loadOrders();
     await loadCustomers();
     await loadPayments();
+    await loadPromos();
     await loadMovements();
     await loadShifts();
     await loadSettings();
@@ -276,6 +277,10 @@ function setupButtons() {
 
   $("refreshPayments").onclick =
     loadPayments;
+
+  $("addPromo").onclick = () => { $("promoForm").hidden = false; clearPromoForm(); };
+  $("cancelPromo").onclick = () => { $("promoForm").hidden = true; };
+  $("promoForm").onsubmit = savePromo;
 
 
   $("openShift").onclick =
@@ -1591,6 +1596,34 @@ window.deleteShift =
     await loadShifts();
 
   };
+
+
+/* =========================
+   PROMOS
+========================= */
+
+function clearPromoForm() {
+  ["promoId","promoCode","promoValue","promoMin","promoMax","promoLimit","promoStart","promoEnd"].forEach(id => { $(id).value = ""; });
+  $("promoPerUser").value = "1"; $("promoType").value = "percent"; $("promoActive").value = "true"; $("promoMsg").textContent = "";
+}
+
+function toLocalInput(value) { if (!value) return ""; const d=new Date(value); const pad=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+
+async function loadPromos() {
+  const r=await db.from("promo_codes").select("*").order("id",{ascending:false});
+  if(r.error){ $("promoRows").innerHTML='<tr><td colspan="7">'+esc(r.error.message)+'</td></tr>'; return; }
+  $("promoRows").innerHTML=(r.data||[]).map(p=>{
+    const discount=p.discount_type==="percent" ? esc(p.discount_value)+"%" : rupiah(p.discount_value);
+    const period=(p.starts_at?new Date(p.starts_at).toLocaleString("id-ID"):"-")+" s/d "+(p.ends_at?new Date(p.ends_at).toLocaleString("id-ID"):"-");
+    return '<tr><td><b>'+esc(p.code)+'</b></td><td>'+discount+'</td><td>'+rupiah(p.min_subtotal)+'</td><td>'+p.used_count+(p.usage_limit?"/"+p.usage_limit:"")+'</td><td>'+period+'</td><td>'+ (p.is_active?"Aktif":"Nonaktif") +'</td><td><button onclick="editPromo('+p.id+')">Edit</button> <button class="danger" onclick="deletePromo('+p.id+')">Hapus</button></td></tr>';
+  }).join("");
+}
+
+window.editPromo=async function(id){ const r=await db.from("promo_codes").select("*").eq("id",id).single(); if(r.error)return alert(r.error.message); const p=r.data; $("promoForm").hidden=false; $("promoId").value=p.id; $("promoCode").value=p.code; $("promoType").value=p.discount_type; $("promoValue").value=p.discount_value; $("promoMin").value=p.min_subtotal; $("promoMax").value=p.max_discount??""; $("promoLimit").value=p.usage_limit??""; $("promoPerUser").value=p.per_user_limit; $("promoStart").value=toLocalInput(p.starts_at); $("promoEnd").value=toLocalInput(p.ends_at); $("promoActive").value=String(p.is_active); };
+
+async function savePromo(e){ e.preventDefault(); const id=$("promoId").value; const data={code:$("promoCode").value.trim().toUpperCase(),discount_type:$("promoType").value,discount_value:Number($("promoValue").value),min_subtotal:Number($("promoMin").value)||0,max_discount:$("promoMax").value?Number($("promoMax").value):null,usage_limit:$("promoLimit").value?Number($("promoLimit").value):null,per_user_limit:Number($("promoPerUser").value)||1,starts_at:$("promoStart").value?new Date($("promoStart").value).toISOString():null,ends_at:$("promoEnd").value?new Date($("promoEnd").value).toISOString():null,is_active:$("promoActive").value==="true",updated_at:new Date().toISOString()}; const r=id?await db.from("promo_codes").update(data).eq("id",id):await db.from("promo_codes").insert(data); if(r.error){$("promoMsg").textContent="Gagal: "+r.error.message;return;} $("promoForm").hidden=true; await loadPromos(); }
+
+window.deletePromo=async function(id){ if(!confirm("Hapus kode promo ini?"))return; const r=await db.from("promo_codes").delete().eq("id",id); if(r.error)return alert(r.error.message); await loadPromos(); };
 
 
 /* =========================
