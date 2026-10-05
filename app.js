@@ -2040,7 +2040,9 @@ async function handleCheckout() {
             ?.value
             .trim() || null,
         p_payment_bank_code: bankCode,
-        p_payment_ewallet_code: ewalletCode
+        p_payment_ewallet_code: ewalletCode,
+        p_promo_code:
+          document.querySelector("#checkoutPromo")?.value.trim() || null
       }
     );
 
@@ -2080,9 +2082,14 @@ async function handleCheckout() {
         ).trim()
       : "";
 
+  const promoText =
+    Number(data.discount_amount || 0) > 0
+      ? " · Diskon promo " + rupiah(data.discount_amount)
+      : "";
+
   setMessage(
     message,
-    `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}${ewalletText}`
+    `Pesanan ${data.order_number} berhasil dibuat · Jarak ${data.distance_km} km · Ongkir ${rupiah(data.shipping_fee)}${promoText} · Total ${rupiah(data.total_amount)} · Pembayaran: ${data.payment_method}${bankText}${ewalletText}`
   );
 
   if (paymentMethod !== "cash") {
