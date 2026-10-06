@@ -1160,8 +1160,16 @@ async function loadPayments() {
         const refundLabel = payment.refund_status === "succeeded" ? "Refund berhasil" :
           payment.refund_status === "pending" ? "Refund diproses" :
           payment.refund_status === "requested" ? "Menunggu Owner" :
-          payment.refund_status === "failed" ? "Refund gagal" : "-";
+          payment.refund_status === "failed" ? "Refund otomatis gagal" : "-";
         const canRefund = payment.status === "paid" && ["none","requested","failed"].includes(payment.refund_status);
+        const canManualRefund = payment.status === "paid" && payment.refund_status === "failed" && ["owner","admin"].includes(me?.role);
+        let action = "-";
+        if (canManualRefund) {
+          action = "<button type=\"button\" onclick=\"confirmManualRefund(" + Number(payment.id) + "," + Number(payment.order_id) + ")\" >Refund Manual</button>";
+        } else if (canRefund) {
+          action = "<button type=\"button\" onclick=\"processPaymentRefund(" + Number(payment.order_id) + ")\" >" +
+            (payment.refund_status === "requested" ? "Proses Refund" : "Refund") + "</button>";
+        }
         return "<tr>" +
           "<td>" + esc(payment.transaction_id || "-") + "</td>" +
           "<td>" + payment.order_id + "</td>" +
@@ -1169,7 +1177,7 @@ async function loadPayments() {
           "<td>" + esc(payment.status) + (payment.refund_status && payment.refund_status !== "none" ? "<br><small>" + esc(refundLabel) + "</small>" : "") + "</td>" +
           "<td>" + rupiah(payment.amount) + "</td>" +
           "<td>" + new Date(payment.created_at).toLocaleString("id-ID") + "</td>" +
-          "<td>" + (canRefund ? "<button type=\"button\" onclick=\"processPaymentRefund(" + Number(payment.order_id) + ")\">" + (payment.refund_status === "requested" ? "Proses Refund" : "Refund") + "</button>" : "-") + "</td>" +
+          "<td>" + action + "</td>" +
           "</tr>";
       }).join("");
 }
@@ -1211,6 +1219,66 @@ async function processPaymentRefund(orderId) {
   } catch (error) {
     alert("Refund gagal: " + error.message);
   }
+}
+
+window.confirmManualRefund = async function(paymentId, orderId) {
+  if (!user || !["owner","admin"].includes(me?.role)) {
+    alert("Akses ditolak. Refund manual hanya untuk Owner/Admin.");
+    return;
+  }
+
+  const payment = await db.from("payments")
+    .select("id,order_id,amount,status,refund_status,refund_reason,payment_method,payment_bank_code,payment_ewallet_code")
+    .eq("id", Number(paymentId))
+    .maybeSingle();
+
+  if (payment.error) {
+    alert("Gagal membaca pembayaran: " + payment.error.message);
+    return;
+  }
+
+  if (!payment.data || payment.data.status !== "paid" || payment.data.refund_status !== "failed") {
+    alert("Refund manual hanya tersedia setelah refund otomatis gagal.");
+    return;
+  }
+
+  const reason = prompt(
+    "Konfirmasi REFUND MANUAL untuk order #" + orderId + "\n\n" +
+    "Nominal: " + rupiah(payment.data.amount) + "\n" +
+    "Metode: " + (payment.data.payment_method || "-") + "\n\n" +
+    "Pastikan dana SUDAH benar-benar dikembalikan ke customer.\n" +
+    "Masukkan alasan/catatan refund:"
+  );
+
+  if (reason === null) return;
+  const finalReason = reason.trim() || "MANUAL_REFUND";
+
+  if (!confirm(
+    "Yakin konfirmasi refund manual?\n\n" +
+    "Order #" + orderId + "\n" +
+    "Nominal: " + rupiah(payment.data.amount) + "\n\n" +
+    "Setelah dikonfirmasi, status pembayaran dan order akan menjadi REFUNDED."
+  )) return;
+
+  const result = await db.rpc("admin_confirm_manual_refund", {
+    p_payment_id: Number(paymentId),
+    p_reason: finalReason
+  });
+
+  if (result.error) {
+    alert("Refund manual gagal: " + result.error.message);
+    return;
+  }
+
+  alert(
+    "Refund manual berhasil dikonfirmasi.\n\n" +
+    "Order #" + orderId + " → REFUNDED\n" +
+    "Nominal: " + rupiah(payment.data.amount)
+  );
+
+  await loadPayments();
+  await loadDashboard();
+  await loadOrders();
 }
 
 /* =========================
