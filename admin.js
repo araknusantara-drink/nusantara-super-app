@@ -135,6 +135,9 @@ async function start() {
     await loadCustomers();
     await loadPayments();
     await loadPromos();
+    if (me?.role === "owner" || me?.role === "admin") {
+      await loadFinanceReport();
+    }
     await loadMovements();
     await loadShifts();
     await loadSettings();
@@ -277,6 +280,16 @@ function setupButtons() {
 
   $("refreshPayments").onclick =
     loadPayments;
+
+  const financeTab = $("financeTabButton");
+  if (me?.role === "owner" || me?.role === "admin") {
+    financeTab.hidden = false;
+    setFinanceDates();
+    $("refreshFinance").onclick = loadFinanceReport;
+    $("exportFinance").onclick = exportFinanceCsv;
+  } else {
+    financeTab.hidden = true;
+  }
 
   $("addPromo").onclick = () => { $("promoForm").hidden = false; clearPromoForm(); };
   $("cancelPromo").onclick = () => { $("promoForm").hidden = true; };
@@ -735,6 +748,209 @@ async function loadDashboard() {
             "</small></p>"
           ).join("")
       : "<p>Semua stok aman.</p>";
+}
+
+function localDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
+
+function setFinanceDates() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  $("financeFrom").value = localDateInputValue(first);
+  $("financeTo").value = localDateInputValue(now);
+}
+
+let financeExportRows = [];
+
+async function loadFinanceReport() {
+  if (!(me?.role === "owner" || me?.role === "admin")) return;
+
+  const from = $("financeFrom").value;
+  const to = $("financeTo").value;
+
+  if (!from || !to) return;
+
+  const start = new Date(from + "T00:00:00");
+  const end = new Date(new Date(to + "T00:00:00").getTime() + 86400000);
+
+  const orderResult = await db
+    .from("orders")
+    .select("id,order_number,subtotal,discount_amount,shipping_fee,payment_fee,total_amount,status,created_at")
+    .gte("created_at", start.toISOString())
+    .lt("created_at", end.toISOString())
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(2000);
+
+  if (orderResult.error) {
+    $("financeSummary").textContent = "Gagal memuat laporan: " + orderResult.error.message;
+    return;
+  }
+
+  const orders = orderResult.data || [];
+  const orderIds = orders.map(o => o.id);
+
+  let payments = [];
+  let items = [];
+
+  if (orderIds.length) {
+    const [paymentResult, itemResult] = await Promise.all([
+      db.from("payments")
+        .select("order_id,amount,status,payment_method,refund_amount,refund_status,refunded_at")
+        .in("order_id", orderIds),
+      db.from("order_items")
+        .select("order_id,product_id,quantity,unit_price,subtotal,products(name,cost_price)")
+        .in("order_id", orderIds)
+    ]);
+
+    if (paymentResult.error) {
+      $("financeSummary").textContent = "Gagal memuat pembayaran: " + paymentResult.error.message;
+      return;
+    }
+    if (itemResult.error) {
+      $("financeSummary").textContent = "Gagal memuat item: " + itemResult.error.message;
+      return;
+    }
+
+    payments = paymentResult.data || [];
+    items = itemResult.data || [];
+  }
+
+  const paidOrderIds = new Set(
+    payments
+      .filter(p => ["paid", "refunded"].includes(p.status))
+      .map(p => p.order_id)
+  );
+
+  const financialOrders = orders.filter(o => paidOrderIds.has(o.id));
+
+  const productSales = financialOrders.reduce(
+    (t, o) => t + Number(o.subtotal || 0),
+    0
+  );
+
+  const discount = financialOrders.reduce(
+    (t, o) => t + Number(o.discount_amount || 0),
+    0
+  );
+
+  const shipping = financialOrders.reduce(
+    (t, o) => t + Number(o.shipping_fee || 0),
+    0
+  );
+
+  const paymentFee = financialOrders.reduce(
+    (t, o) => t + Number(o.payment_fee || 0),
+    0
+  );
+
+  const total = financialOrders.reduce(
+    (t, o) => t + Number(o.total_amount || 0),
+    0
+  );
+
+  const refund = payments.reduce(
+    (t, p) => t + (
+      p.refund_status === "succeeded"
+        ? Number(p.refund_amount || 0)
+        : 0
+    ),
+    0
+  );
+
+  const financialOrderIds = new Set(financialOrders.map(o => o.id));
+  const cogs = items
+    .filter(i => financialOrderIds.has(i.order_id))
+    .reduce(
+      (t, i) =>
+        t +
+        Number(i.quantity || 0) *
+        Number(i.products?.cost_price || 0),
+      0
+    );
+
+  const profit = productSales - discount + shipping - paymentFee - cogs - refund;
+
+  const methodMap = {};
+  payments
+    .filter(p => financialOrderIds.has(p.order_id) && ["paid", "refunded"].includes(p.status))
+    .forEach(p => {
+      const key = p.payment_method || "unknown";
+      if (!methodMap[key]) methodMap[key] = { count: 0, amount: 0 };
+      methodMap[key].count += 1;
+      methodMap[key].amount += Number(p.amount || 0);
+    });
+
+  const methodRows = Object.entries(methodMap)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .map(([method, value]) =>
+      "<tr><td>" + esc(method) + "</td><td>" +
+      value.count + "</td><td>" + rupiah(value.amount) + "</td></tr>"
+    )
+    .join("");
+
+  $("financeProductSales").textContent = rupiah(productSales);
+  $("financeShipping").textContent = rupiah(shipping);
+  $("financePaymentFee").textContent = rupiah(paymentFee);
+  $("financeTotal").textContent = rupiah(total);
+  $("financeDiscount").textContent = rupiah(discount);
+  $("financeRefund").textContent = rupiah(refund);
+  $("financeCogs").textContent = rupiah(cogs);
+  $("financeProfit").textContent = rupiah(profit);
+
+  $("financeSummary").innerHTML =
+    "<p><b>Periode:</b> " + esc(from) + " s/d " + esc(to) + "</p>" +
+    "<p><b>Order berbayar:</b> " + financialOrders.length + "</p>" +
+    "<p><b>Penjualan bersih produk setelah diskon:</b> " +
+    rupiah(productSales - discount) + "</p>" +
+    "<p><b>Perkiraan laba kotor:</b> " + rupiah(profit) + "</p>";
+
+  $("financePaymentRows").innerHTML =
+    methodRows ||
+    "<tr><td colspan=\"3\">Belum ada transaksi berbayar.</td></tr>";
+
+  financeExportRows = [
+    ["Periode", from + " s/d " + to],
+    ["Order berbayar", financialOrders.length],
+    ["Penjualan Produk", productSales],
+    ["Diskon", discount],
+    ["Ongkir", shipping],
+    ["Biaya Pembayaran", paymentFee],
+    ["Total Order", total],
+    ["Refund", refund],
+    ["HPP / Modal", cogs],
+    ["Laba Kotor", profit]
+  ];
+}
+
+function exportFinanceCsv() {
+  if (!(me?.role === "owner" || me?.role === "admin")) return;
+  if (!financeExportRows.length) {
+    alert("Muat laporan terlebih dahulu.");
+    return;
+  }
+
+  const csv = financeExportRows
+    .map(row => row.map(value => {
+      const text = String(value ?? "");
+      return '"' + text.replace(/"/g, '""') + '"';
+    }).join(","))
+    .join("\n");
+
+  const blob = new Blob(["\\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "laporan-keuangan-nusantara-drink-" +
+    $("financeFrom").value + "-sampai-" + $("financeTo").value + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 /* =========================
