@@ -29,6 +29,7 @@ let orderMapChannels = {};
 let paymentRealtimeChannel = null;
 let editingAddressId = null;
 let wishlistProductIds = new Set();
+let notificationRealtimeChannel = null;
 
 
 /* =========================
@@ -183,6 +184,178 @@ async function toggleWishlist(productId) {
 
   renderProducts();
   renderWishlist();
+}
+
+
+/* =========================
+   NOTIFICATIONS
+========================= */
+
+function notificationTypeIcon(type) {
+  return ({
+    order_created: "🛒",
+    order_status: "📦",
+    payment: "💳",
+    refund: "💰",
+    promo: "🎟️",
+    stock: "⚠️",
+    general: "🔔",
+    new_order: "🛒"
+  })[type] || "🔔";
+}
+
+function renderNotificationList(items = []) {
+  const container = document.querySelector("#notificationList");
+  if (!container) return;
+
+  if (!currentUser) {
+    container.innerHTML = "Login untuk melihat notifikasi.";
+    return;
+  }
+
+  if (!items.length) {
+    container.innerHTML = "<p>Belum ada notifikasi.</p>";
+    return;
+  }
+
+  container.innerHTML = items.map(item => {
+    const unreadClass = item.is_read ? "" : " unread";
+    const orderLink = item.order_id
+      ? "<small>Pesanan #" + Number(item.order_id) + "</small>"
+      : "";
+    return `
+      <div class="notification-item${unreadClass}" data-notification-id="${Number(item.id)}">
+        <div>${notificationTypeIcon(item.type)} ${escapeHtml(item.title)}</div>
+        <div style="margin-top:4px;font-weight:400;">${escapeHtml(item.message)}</div>
+        ${orderLink}
+        <span class="notification-time">${new Date(item.created_at).toLocaleString("id-ID")}</span>
+        ${!item.is_read ? `
+          <button type="button" class="text-btn" style="margin-top:6px;" onclick="markNotificationRead(${Number(item.id)})">
+            Tandai dibaca
+          </button>
+        ` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadNotifications() {
+  if (!currentUser) return;
+
+  const list = document.querySelector("#notificationList");
+  if (list && !list.dataset.loaded) {
+    list.innerHTML = "<p>Memuat notifikasi...</p>";
+  }
+
+  const { data, error } = await supabaseClient
+    .from("notifications")
+    .select("id,type,title,message,order_id,is_read,created_at")
+    .eq("user_id", currentUser.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error("Notification load error:", error);
+    if (list) list.innerHTML = "<p>Notifikasi belum bisa dimuat: " + escapeHtml(error.message) + "</p>";
+    return;
+  }
+
+  if (list) list.dataset.loaded = "1";
+  renderNotificationList(data || []);
+
+  const { count, error: countError } = await supabaseClient
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", currentUser.id)
+    .eq("is_read", false);
+
+  if (countError) {
+    console.error("Notification count error:", countError);
+    return;
+  }
+
+  updateNotificationBadge(count || 0);
+}
+
+function updateNotificationBadge(count) {
+  const badge = document.querySelector("#notificationBadge");
+  if (!badge) return;
+  const value = Number(count) || 0;
+  badge.textContent = value > 99 ? "99+" : String(value);
+  badge.style.display = value > 0 ? "inline-block" : "none";
+}
+
+async function markNotificationRead(id) {
+  if (!currentUser) return;
+
+  const { error } = await supabaseClient
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("id", Number(id))
+    .eq("user_id", currentUser.id);
+
+  if (error) {
+    alert("Gagal menandai notifikasi: " + error.message);
+    return;
+  }
+
+  await loadNotifications();
+}
+
+async function markAllNotificationsRead() {
+  if (!currentUser) return;
+
+  const { error } = await supabaseClient
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("user_id", currentUser.id)
+    .eq("is_read", false);
+
+  if (error) {
+    alert("Gagal menandai notifikasi: " + error.message);
+    return;
+  }
+
+  await loadNotifications();
+}
+
+function openNotificationPanel() {
+  const panel = document.querySelector("#notificationPanel");
+  if (!panel) return;
+
+  panel.style.display = "block";
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  if (currentUser) loadNotifications();
+}
+
+function closeNotificationRealtime() {
+  if (notificationRealtimeChannel) {
+    supabaseClient.removeChannel(notificationRealtimeChannel);
+    notificationRealtimeChannel = null;
+  }
+}
+
+function setupNotificationRealtime() {
+  closeNotificationRealtime();
+
+  if (!currentUser) return;
+
+  notificationRealtimeChannel = supabaseClient
+    .channel("customer-notifications-" + currentUser.id)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: "user_id=eq." + currentUser.id
+      },
+      async () => {
+        await loadNotifications();
+      }
+    )
+    .subscribe();
 }
 
 
@@ -564,6 +737,9 @@ function showRegisterView() {
 async function showLoggedInView(user) {
 
   currentUser = user;
+
+  loadNotifications();
+  setupNotificationRealtime();
 
   document.querySelector("#loginView")
     ?.style.setProperty("display", "none");
@@ -2858,6 +3034,16 @@ function setupNavigation() {
       "#profileNavButton"
     );
 
+  const notificationButton =
+    document.querySelector(
+      "#notificationButton"
+    );
+
+  const markAllNotificationsButton =
+    document.querySelector(
+      "#markAllNotificationsButton"
+    );
+
 
   if (accountButton) {
 
@@ -2951,6 +3137,32 @@ function setupNavigation() {
     );
   }
 
+
+  if (notificationButton) {
+    notificationButton.addEventListener(
+      "click",
+      async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        if (!session) {
+          openAccountPanel();
+          showLoginView();
+          return;
+        }
+
+        currentUser = session.user;
+        openNotificationPanel();
+        await loadNotifications();
+      }
+    );
+  }
+
+  if (markAllNotificationsButton) {
+    markAllNotificationsButton.addEventListener(
+      "click",
+      markAllNotificationsRead
+    );
+  }
 
   if (profileNavButton) {
 
@@ -3091,6 +3303,15 @@ supabaseClient.auth.onAuthStateChange(
       currentUser = null;
       customerAddresses = [];
       editingAddressId = null;
+      closeNotificationRealtime();
+      updateNotificationBadge(0);
+      const notificationPanel = document.querySelector("#notificationPanel");
+      if (notificationPanel) notificationPanel.style.display = "none";
+      const notificationList = document.querySelector("#notificationList");
+      if (notificationList) {
+        delete notificationList.dataset.loaded;
+        notificationList.innerHTML = "Login untuk melihat notifikasi.";
+      }
 
       showLoginView();
     }
