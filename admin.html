@@ -77,6 +77,10 @@
         💰 Pembayaran
       </button>
 
+      <button type="button" data-tab="finance" id="financeTabButton">
+        📊 Keuangan
+      </button>
+
       <button type="button" data-tab="promos">
         🎟️ Promo
       </button>
@@ -542,6 +546,69 @@
 
 
     <!-- PROMO -->
+    <section id="finance" class="tab" hidden>
+
+      <div class="filters">
+        <label>
+          Dari
+          <input id="financeFrom" type="date">
+        </label>
+        <label>
+          Sampai
+          <input id="financeTo" type="date">
+        </label>
+        <button id="refreshFinance" type="button">Refresh</button>
+        <button id="exportFinance" type="button">⬇️ Export CSV</button>
+      </div>
+
+      <div class="stats">
+        <article>Penjualan Produk<strong id="financeProductSales">Rp0</strong></article>
+        <article>Ongkir<strong id="financeShipping">Rp0</strong></article>
+        <article>Biaya Pembayaran<strong id="financePaymentFee">Rp0</strong></article>
+        <article>Total Order<strong id="financeTotal">Rp0</strong></article>
+      </div>
+
+      <div class="stats">
+        <article>Diskon<strong id="financeDiscount">Rp0</strong></article>
+        <article>Refund<strong id="financeRefund">Rp0</strong></article>
+        <article>HPP / Modal<strong id="financeCogs">Rp0</strong></article>
+        <article>Laba Kotor<strong id="financeProfit">Rp0</strong></article>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Ringkasan</h3>
+        <div id="financeSummary">Memuat...</div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Metode Pembayaran</h3>
+        <div class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Metode</th>
+                <th>Transaksi</th>
+                <th>Nominal</th>
+              </tr>
+            </thead>
+            <tbody id="financePaymentRows">
+              <tr><td colspan="3">Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Catatan</h3>
+        <p class="note">
+          Laporan memakai order yang dibuat dalam periode dan memiliki pembayaran
+          berstatus paid/refunded. Refund dihitung dari data refund yang tercatat
+          pada payment. Data ini adalah laporan internal Nusantara Drink.
+        </p>
+      </div>
+
+    </section>
+
     <section id="promos" class="tab" hidden>
       <div class="title">
         <h2>Promo / Voucher</h2>
@@ -707,7 +774,7 @@
 
 
 <!-- DASHBOARD JS -->
-<script src="admin.js?v=20261006-5"></script>
+<script src="admin.js?v=20261006-6"></script>
 
 
 <!-- DETEKSI ERROR -->
