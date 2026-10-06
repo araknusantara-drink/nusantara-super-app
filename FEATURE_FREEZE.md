@@ -44,3 +44,12 @@ Future feature work must be additive and must not rewrite, remove, or alter veri
 A new feature is not considered complete until the previously working related flow still works.
 
 This file is a project-level guardrail, not a substitute for GitHub branch protection or automated tests.
+
+
+## Refund Manual — VERIFIED & FROZEN
+- Refund otomatis Xendit tetap digunakan untuk channel yang didukung.
+- Jika Xendit menolak karena channel tidak mendukung refund, Owner/Admin dapat menggunakan Refund Manual.
+- Refund Manual hanya dapat dikonfirmasi untuk payment `paid` dengan `refund_status=failed`.
+- Konfirmasi manual mengubah payment dan order menjadi `refunded`, mencatat nominal/alasan, dan membuat audit log.
+- Refund Manual tidak mengubah atau membypass refund otomatis Xendit.
+- Perubahan berikutnya harus additive dan tidak boleh mengubah alur refund yang sudah terverifikasi tanpa persetujuan eksplisit user.
