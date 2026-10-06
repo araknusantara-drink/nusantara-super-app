@@ -53,3 +53,11 @@ This file is a project-level guardrail, not a substitute for GitHub branch prote
 - Konfirmasi manual mengubah payment dan order menjadi `refunded`, mencatat nominal/alasan, dan membuat audit log.
 - Refund Manual tidak mengubah atau membypass refund otomatis Xendit.
 - Perubahan berikutnya harus additive dan tidak boleh mengubah alur refund yang sudah terverifikasi tanpa persetujuan eksplisit user.
+
+
+## Notification Center — VERIFIED & FROZEN
+- Customer Notification Center tampil di header dengan badge unread.
+- Customer dapat membuka daftar notifikasi dan menandai satu atau semua sebagai dibaca.
+- Notifikasi order dibuat/status/payment dibuat melalui database trigger.
+- Realtime notification updates digunakan agar notifikasi baru dapat muncul tanpa reload.
+- Perubahan berikutnya harus additive dan tidak boleh mengubah alur notifikasi yang sudah terverifikasi tanpa persetujuan eksplisit user.
