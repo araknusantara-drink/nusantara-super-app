@@ -61,3 +61,12 @@ This file is a project-level guardrail, not a substitute for GitHub branch prote
 - Notifikasi order dibuat/status/payment dibuat melalui database trigger.
 - Realtime notification updates digunakan agar notifikasi baru dapat muncul tanpa reload.
 - Perubahan berikutnya harus additive dan tidak boleh mengubah alur notifikasi yang sudah terverifikasi tanpa persetujuan eksplisit user.
+
+
+## Reset Data Pesanan Testing — VERIFIED & FROZEN
+- Owner-only feature for clearing local testing order/transaction data.
+- Requires explicit confirmation and the phrase `RESET PESANAN`.
+- Clears orders and related local transaction records, order tracking, order notifications, and promo redemptions.
+- Does not delete products, customers, accounts, store settings, master promo codes, or external Xendit transactions.
+- Server-side authorization is restricted to an active Owner.
+- Future changes must be additive and must not alter the verified reset behavior without explicit user approval.
