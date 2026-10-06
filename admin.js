@@ -294,6 +294,14 @@ function setupButtons() {
   $("settingsForm").onsubmit =
     saveSettings;
 
+  const resetSection = $("resetOrdersSection");
+  const resetButton = $("resetTestOrdersButton");
+
+  if (me?.role === "owner") {
+    resetSection.hidden = false;
+    resetButton.onclick = resetTestOrders;
+  }
+
   $("getStoreLocation").onclick = () => {
     if (!navigator.geolocation) {
       alert("Browser tidak mendukung lokasi.");
@@ -1827,6 +1835,70 @@ async function saveSettings(event) {
         result.error.message
       : "Pengaturan tersimpan.";
 
+}
+
+
+async function resetTestOrders() {
+  if (me?.role !== "owner") {
+    alert("Akses ditolak. Fitur ini hanya untuk Owner.");
+    return;
+  }
+
+  const first = confirm(
+    "⚠️ RESET DATA PESANAN TESTING\\n\\n" +
+    "Semua order dan data transaksi lokal terkait akan dihapus. " +
+    "Produk, customer, stok, akun, pengaturan toko, dan transaksi eksternal Xendit tidak dihapus.\\n\\n" +
+    "Lanjutkan?"
+  );
+
+  if (!first) return;
+
+  const phrase = prompt(
+    'Konfirmasi akhir: ketik "RESET PESANAN" untuk melanjutkan.'
+  );
+
+  if (phrase !== "RESET PESANAN") {
+    alert("Reset dibatalkan. Teks konfirmasi tidak cocok.");
+    return;
+  }
+
+  const button = $("resetTestOrdersButton");
+  const msg = $("resetOrdersMsg");
+  button.disabled = true;
+  msg.textContent = "Memproses reset...";
+
+  try {
+    const { data, error } = await db.rpc("owner_reset_test_orders");
+
+    if (error) throw error;
+
+    msg.textContent =
+      "Reset berhasil. " +
+      (data?.orders_deleted ?? 0) +
+      " pesanan dihapus. Dashboard akan dimuat ulang.";
+
+    await Promise.all([
+      loadDashboard(),
+      loadOrders(),
+      loadPayments(),
+      loadPromos()
+    ]);
+
+    msg.textContent =
+      "✅ Reset berhasil. " +
+      (data?.orders_deleted ?? 0) +
+      " pesanan, " +
+      (data?.payments_deleted ?? 0) +
+      " pembayaran, dan " +
+      (data?.promo_redemptions_deleted ?? 0) +
+      " redemption promo dibersihkan.";
+  } catch (error) {
+    console.error("RESET TEST ORDERS ERROR:", error);
+    msg.textContent =
+      "❌ Reset gagal: " + (error?.message || "Terjadi kesalahan.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 
