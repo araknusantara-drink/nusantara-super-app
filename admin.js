@@ -1065,8 +1065,8 @@ function renderInventoryAlerts() {
     const min = Number(p.min_stock || 0);
     const status = stock <= 0 ? "Habis" : "Menipis";
     return "<tr><td>" + esc(p.name) + "</td><td>" + stock + "</td><td>" + min +
-      "</td><td>" + status + "</td><td><button type=\\"button\\" onclick=\\"openRestockForm(" + Number(p.id) + ")\\">Restock</button></td></tr>";
-  }).join("") : "<tr><td colspan=\\"5\\">Tidak ada stok menipis.</td></tr>";
+      '</td><td>' + status + '</td><td><button type="button" onclick="openRestockForm(' + Number(p.id) + ')">Restock</button></td></tr>';
+  }).join("") : '<tr><td colspan="5">Tidak ada stok menipis.</td></tr>';
 }
 
 
