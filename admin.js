@@ -1171,111 +1171,57 @@ window.deleteMovement = async function(id) {
 };
 
 async function saveMovement(event) {
-
   event.preventDefault();
 
+  const productId = Number($("mproduct").value);
+  const quantity = Number($("mqty").value);
+  const type = $("mtype").value;
+  const note = $("mnote").value.trim() || null;
+  const product = products.find(p => p.id == productId);
 
-  const productId =
-    Number($("mproduct").value);
+  if (!product) {
+    $("mmsg").textContent = "Produk tidak ditemukan.";
+    return;
+  }
 
-  const quantity =
-    Number($("mqty").value);
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    $("mmsg").textContent = "Jumlah harus bilangan bulat lebih dari 0.";
+    return;
+  }
 
-  const type =
-    $("mtype").value;
-
-
-  const product =
-    products.find(
-      p => p.id == productId
-    );
-
-
-  if (!product) return;
-
-
-  const newStock =
-    product.stock +
-    (
-      type === "in"
-        ? quantity
-        : type === "out"
-          ? -quantity
-          : quantity
-    );
-
+  const newStock = Number(product.stock || 0) +
+    (type === "out" ? -quantity : quantity);
 
   if (newStock < 0) {
-
-    $("mmsg").textContent =
-      "Stok tidak boleh minus.";
-
+    $("mmsg").textContent = "Stok tidak boleh minus.";
     return;
-
   }
 
+  const saveButton = $("moveForm").querySelector('[type="submit"]');
+  if (saveButton) saveButton.disabled = true;
+  $("mmsg").textContent = "Menyimpan pergerakan stok...";
 
-  const movement =
-    await db
-      .from("inventory_movements")
-      .insert({
+  try {
+    const { error } = await db.rpc("admin_add_inventory_movement", {
+      p_product_id: productId,
+      p_type: type,
+      p_quantity: quantity,
+      p_note: note
+    });
 
-        product_id:
-          productId,
+    if (error) throw error;
 
-        type,
-
-        quantity,
-
-        note:
-          $("mnote").value.trim()
-          || null,
-
-        created_by:
-          user.id
-
-      });
-
-
-  if (movement.error) {
-
-    $("mmsg").textContent =
-      movement.error.message;
-
-    return;
-
+    $("moveForm").hidden = true;
+    $("mmsg").textContent = "Pergerakan stok berhasil disimpan.";
+    await loadProducts();
+    await loadMovements();
+    await loadDashboard();
+  } catch (error) {
+    $("mmsg").textContent = error?.message || "Gagal menyimpan pergerakan stok.";
+  } finally {
+    if (saveButton) saveButton.disabled = false;
   }
-
-
-  const update =
-    await db
-      .from("products")
-      .update({
-        stock: newStock
-      })
-      .eq(
-        "id",
-        productId
-      );
-
-
-  if (update.error) {
-
-    $("mmsg").textContent =
-      update.error.message;
-
-    return;
-
-  }
-
-
-  $("moveForm").hidden = true;
-
-  await loadProducts();
-  await loadMovements();
-
 }
-
 
 /* =========================
    CUSTOMER
