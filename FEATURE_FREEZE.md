@@ -76,3 +76,9 @@ This file is a project-level guardrail, not a substitute for GitHub branch prote
 - Owner Finance Reports section has been added and confirmed visible by the user.
 - Preserve existing dashboard analytics and payment/refund behavior.
 - Future changes must be additive and must not alter verified financial calculations or transaction flows without explicit user approval.
+
+
+## Inventory Alert & Restock — VERIFIED & FROZEN
+- Inventory low-stock/restock functionality is confirmed working by the user.
+- Preserve existing stock movement, order stock deduction, cancellation stock restoration, and audit/security controls.
+- Future changes must be additive and must not alter verified inventory behavior without explicit user approval.
