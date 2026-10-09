@@ -258,6 +258,20 @@ function setupButtons() {
 
   };
 
+  window.openRestockForm = function(productId) {
+    if (me?.role !== "owner" && me?.role !== "admin" && me?.role !== "staff") {
+      alert("Akses ditolak.");
+      return;
+    }
+    $("mproduct").value = String(productId);
+    $("mtype").value = "in";
+    $("mqty").value = "";
+    $("mnote").value = "Restock dari peringatan stok menipis";
+    $("moveForm").hidden = false;
+    $("moveForm").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("mqty").focus();
+  };
+
 
   $("cancelMove").onclick = () => {
 
@@ -383,6 +397,8 @@ async function loadProducts() {
         ${esc(product.name)}
       </option>
     `).join("");
+
+  renderInventoryAlerts();
 
 
   $("productRows").innerHTML =
@@ -1023,6 +1039,25 @@ window.openOrderDetail = async function(id) {
 /* =========================
    STOCK
 ========================= */
+
+function renderInventoryAlerts() {
+  const low = products.filter(p => p.is_active && Number(p.stock || 0) <= Number(p.min_stock || 0))
+    .sort((a,b) => Number(a.stock || 0) - Number(b.stock || 0));
+  const summary = $("inventoryAlertSummary");
+  const rows = $("inventoryAlertRows");
+  if (!summary || !rows) return;
+  summary.textContent = low.length
+    ? low.length + " produk perlu diperiksa / restock."
+    : "Semua stok aktif berada di atas batas minimum.";
+  rows.innerHTML = low.length ? low.map(p => {
+    const stock = Number(p.stock || 0);
+    const min = Number(p.min_stock || 0);
+    const status = stock <= 0 ? "Habis" : "Menipis";
+    return "<tr><td>" + esc(p.name) + "</td><td>" + stock + "</td><td>" + min +
+      "</td><td>" + status + "</td><td><button type=\\"button\\" onclick=\\"openRestockForm(" + Number(p.id) + ")\\">Restock</button></td></tr>";
+  }).join("") : "<tr><td colspan=\\"5\\">Tidak ada stok menipis.</td></tr>";
+}
+
 
 async function loadMovements() {
 
