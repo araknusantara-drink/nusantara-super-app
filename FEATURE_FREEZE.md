@@ -70,3 +70,9 @@ This file is a project-level guardrail, not a substitute for GitHub branch prote
 - Does not delete products, customers, accounts, store settings, master promo codes, or external Xendit transactions.
 - Server-side authorization is restricted to an active Owner.
 - Future changes must be additive and must not alter the verified reset behavior without explicit user approval.
+
+
+## Finance Reports — VERIFIED & FROZEN
+- Owner Finance Reports section has been added and confirmed visible by the user.
+- Preserve existing dashboard analytics and payment/refund behavior.
+- Future changes must be additive and must not alter verified financial calculations or transaction flows without explicit user approval.
