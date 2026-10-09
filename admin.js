@@ -1070,6 +1070,24 @@ function renderInventoryAlerts() {
 }
 
 
+window.openRestockForm = function(productId) {
+  const product = products.find(p => Number(p.id) === Number(productId));
+  if (!product) {
+    alert("Produk tidak ditemukan. Muat ulang data produk lalu coba lagi.");
+    return;
+  }
+
+  $("moveForm").hidden = false;
+  $("mproduct").value = String(product.id);
+  $("mtype").value = "in";
+  $("mqty").value = "";
+  $("mnote").value = "Restock untuk " + product.name;
+  $("mmsg").textContent = "Restock akan dicatat melalui Pergerakan Stok.";
+  $("mqty").focus();
+  $("moveForm").scrollIntoView({ behavior: "smooth", block: "center" });
+};
+
+
 async function loadMovements() {
 
   const result =
