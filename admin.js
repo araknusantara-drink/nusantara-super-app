@@ -141,6 +141,7 @@ async function start() {
 
 
     await loadProducts();
+    await loadInventoryAlerts();
     await loadDashboard();
     await loadOrders();
     await loadCustomers();
@@ -264,10 +265,21 @@ function setupButtons() {
 
 
   $("addMove").onclick = () => {
-
     $("moveForm").hidden = false;
-
   };
+
+  $("inventoryAlertRows").addEventListener("click", event => {
+    const button = event.target.closest("[data-restock-product]");
+    if (!button) return;
+    const productId = Number(button.dataset.restockProduct);
+    $("moveForm").hidden = false;
+    $("mproduct").value = String(productId);
+    $("mtype").value = "in";
+    $("mqty").value = "";
+    $("mnote").value = "Restock dari peringatan stok menipis";
+    $("mmsg").textContent = "Isi jumlah restock, lalu tekan Simpan.";
+    $("moveForm").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   window.openRestockForm = function(productId) {
     if (me?.role !== "owner" && me?.role !== "admin" && me?.role !== "staff") {
@@ -1233,6 +1245,7 @@ async function saveMovement(event) {
     $("mmsg").textContent = "Pergerakan stok berhasil disimpan.";
     await loadProducts();
     await loadMovements();
+    await loadInventoryAlerts();
     await loadDashboard();
   } catch (error) {
     $("mmsg").textContent = error?.message || "Gagal menyimpan pergerakan stok.";
@@ -1240,6 +1253,36 @@ async function saveMovement(event) {
     if (saveButton) saveButton.disabled = false;
   }
 }
+
+async function loadInventoryAlerts() {
+  const tbody = $("inventoryAlertRows");
+  const summary = $("inventoryAlertSummary");
+  if (!tbody || !summary) return;
+
+  const low = products
+    .filter(p => p.is_active && Number(p.stock || 0) <= Number(p.min_stock || 0))
+    .sort((a,b) => Number(a.stock || 0) - Number(b.stock || 0));
+
+  summary.textContent = low.length
+    ? low.length + " produk aktif berada pada atau di bawah stok minimum."
+    : "Semua produk aktif memiliki stok di atas batas minimum.";
+
+  tbody.innerHTML = low.length
+    ? low.map(p => {
+        const stock = Number(p.stock || 0);
+        const min = Number(p.min_stock || 0);
+        const status = stock <= 0 ? "HABIS" : "MENIPIS";
+        return `<tr>
+          <td><b>${esc(p.name)}</b><br><small>${esc(p.sku || "-")}</small></td>
+          <td>${stock}</td>
+          <td>${min}</td>
+          <td>${status}</td>
+          <td><button type="button" data-restock-product="${p.id}">Restock</button></td>
+        </tr>`;
+      }).join("")
+    : '<tr><td colspan="5">Tidak ada stok menipis saat ini.</td></tr>';
+}
+
 
 /* =========================
    CUSTOMER
