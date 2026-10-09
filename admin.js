@@ -48,6 +48,18 @@ function esc(value) {
   }[char]));
 }
 
+function withTimeout(promise, label, milliseconds = 15000) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(
+        label + " melewati batas waktu. Periksa koneksi internet/Supabase, lalu tekan Coba lagi."
+      )), milliseconds);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 
 /* =========================
    START
@@ -67,7 +79,7 @@ async function start() {
       "Memeriksa login...";
 
     const sessionResult =
-      await db.auth.getSession();
+      await withTimeout(db.auth.getSession(), "Pemeriksaan sesi login");
 
     if (sessionResult.error) {
       throw sessionResult.error;
@@ -87,11 +99,10 @@ async function start() {
 
 
     const profileResult =
-      await db
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
+      await withTimeout(
+        db.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+        "Pemeriksaan hak akses Owner"
+      );
 
 
     if (profileResult.error) {
